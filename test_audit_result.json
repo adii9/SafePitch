@@ -1,0 +1,36 @@
+```json
+{
+  "Industry cluster": "AI-powered Online Learning / Upskilling Platforms (Inferred from TAM and Indian EdTech landscape)",
+  "Product Offering": "Online learning platform leveraging AI for personalized education and skill development (Inferred)",
+  "Total Market Size": "$3.6 Billion USD (India EdTech Market, 2025, IMARC Group)",
+  "Addressable Market Size": "$1.14 Billion USD (India AI in Education Market, 2030, Grand View Research - Company's stated TAM of $1.2B is more aligned with a future niche market size rather than current overall EdTech TAM)",
+  "Industry - CAGR": "16.9% (India EdTech Market, 2025-2030, Grand View Research)",
+  "Competitors": [
+    {
+      "Name": "Stimuler",
+      "Country": "India",
+      "Last post-money valuation": "~$13 Million USD (Pre-Series A, via Tracxn/Economic Times)"
+    },
+    {
+      "Name": "MySivi",
+      "Country": "India",
+      "Last post-money valuation": "~$500K USD (Seed round funding, via Tracxn)"
+    },
+    {
+      "Name": "Languify",
+      "Country": "India",
+      "Last post-money valuation": "~$180K USD (Seed round funding, via Economic Times)"
+    }
+  ],
+  "Founders_Verification": {
+    "Jane Doe": {
+      "Educational Experience": "Not Verifiable (Placeholder Name)",
+      "Prior Experience": "Ex-Google (Claimed, Not Verifiable with Placeholder Name)"
+    },
+    "John Smith": {
+      "Educational Experience": "IIT Alumni (Claimed, Not Verifiable with Placeholder Name)",
+      "Prior Experience": "Not specified (Not Verifiable with Placeholder Name)"
+    }
+  }
+}
+```

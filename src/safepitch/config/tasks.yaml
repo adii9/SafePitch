@@ -1,0 +1,110 @@
+kyc_onboarding_task:
+  description: >
+    Analyze the {pitch_deck_content} and {email_body} to extract identity and administrative details
+    for {company_name}.
+
+    You must specifically find and verify the following fields:
+    - Co Alias: Assign 'New' if not clearly stated.
+    - Current Evaluation Stage: Assign 'Step 0 - Deal Sourcing'.
+    - Company: The official name of the startup.
+    - Website: The company's URL (from deck or company registration).
+    - Location City: Primary headquarters city.
+    - Country: Country of operation/headquarters.
+    - Place of Incorporation: City and State/Region where company is registered.
+    - Sector: Categorize as Climate, Health, Agri, Ed Tech, FinTech, or Others.
+    - Industry Cluster: Specific industry vertical (e.g., Remote Cardiac Monitoring, SaaS, etc.).
+    - Product Offering: Brief description of main product/service.
+    - Promoter Name: Lead founder's name.
+    - Email: Contact email address.
+    - Phone: Contact number.
+    - Promoter LinkedIn: URL to the founder's profile.
+    - Year of incorporation: Found in deck or web.
+    - Full Address: Registered office address.
+    - Senior Team: Names and roles from the leadership/team section of the deck.
+    - Prior Experience: For each senior team member, list prior employers and years of experience.
+    - Educational Experience: For each senior team member, list degrees and institutions.
+    - Social and Developmental Impact: Any social/environmental/community impact mentioned.
+
+    If any data is missing in the {pitch_deck_content}, use your search tools to find the
+    Company Website and LinkedIn details.
+
+    Extraction rules:
+    - Prefer explicit text from the pitch deck (leadership slide, team bios, profiles).
+    - If a role is listed without name, do not infer a name.
+    - If experience or education is missing for a person, write "Not stated".
+  expected_output: >
+    A JSON object containing all administrative and company identity data.
+  agent: kyc_specialist
+
+financial_extraction_task:
+  description: >
+    Examine the tables and content in {pitch_deck_content} to extract precise financial performance
+    and investment metrics for {company_name}.
+
+    Extract the following specific fields:
+    - Revenue Model: (e.g., B2B, B2C, SaaS, Subscription, etc.)
+    - Revenue (Year): Latest annual revenue in INR with fiscal year.
+    - EBITDA: Earnings before interest, taxes, depreciation, and amortization.
+    - Unit Economics: CAC, LTV, Contribution Margin, or Gross Margin details.
+    - Current Round Ask: Total funding sought (in USD or INR).
+    - Current Round Exp Valuation: Founder's expected post-money valuation.
+    - EV / Revenue (current FY) Multiple: Calculate if Ask and Revenue are present.
+    - Current Investors: List of current investors (if mentioned in deck or cap table).
+    - Prior Funding: Yes or No - whether the company has raised funding before.
+    - Prior Round Investors: Names of investors from previous funding rounds.
+    - Prior Round Valuation: Valuation from the last completed funding round.
+    - Cap Table: Breakdown of ownership (Founders %, Investors %, ESOP %, etc.).
+    - Valuation Increase from Prior round (%): Calculate percentage increase from prior to current valuation.
+    - Grants Received: Any government, institutional, or philanthropic grants mentioned.
+    - Total Fund Raised: Cumulative funding raised to date (in INR Million or USD).
+
+    Focus heavily on the markdown tables provided by LlamaParse to ensure numerical accuracy.
+    If data is not explicitly stated, return "Not stated".
+  expected_output: >
+    A JSON object containing all financial audit and investment data.
+  agent: financial_auditor
+
+market_verification_task:
+  description: >
+    Verify the market size and competitive landscape for {company_name}.
+
+    DECK-FIRST PROTOCOL (STRICT):
+    1. Extract TAM/SAM, market composition, and competitor names directly from the pitch deck
+       (e.g., market sizing slide, competitive matrix). These MUST be primary values.
+    2. Use Tracxn only to validate competitor intelligence or enrich with valuation/funding.
+       Do NOT replace deck-listed competitors with external names.
+    3. Use external web searches for TAM/SAM/CAGR ONLY when the deck is missing those fields.
+    4. Always tag each market item with Source: "Deck" or "Tracxn".
+
+    Required Fields:
+    - Competitor Name: Direct competitors from deck competitive matrix; if none, find 3-5 on Tracxn.
+    - Last post-money valuation: Latest available from Tracxn or public sources.
+    - Industry Cluster: Specific market segment (e.g., Remote Patient Monitoring, Digital Health).
+    - Total Market Size: Global market size in $Mn or relevant currency with timeframe.
+    - TAM (Total Addressable Market): If in deck, exact figure, units, and timeframe.
+    - SAM (Serviceable Available Market): If in deck, exact figure, units, and timeframe.
+    - Addressable Market Size: Company's addressable portion (% of TAM or specific $Mn).
+    - Industry Composition: Is market fragmented (many players) or consolidated (few leaders)? Top 3 players market share.
+    - Total Fund Raised (by company): Cumulative funding raised to date in INR Million or USD.
+  expected_output: >
+    A JSON object with deck-derived market/competitor data; Tracxn enriches only.
+  agent: market_intelligence_analyst
+
+  # Add this at the end of tasks.yaml
+final_consolidation_task:
+  description: >
+    Review all the information gathered for {company_name} across the previous tasks:
+    1. Identity/Admin details from the KYC Task.
+    2. Financial metrics from the Financial Extraction Task.
+    3. Market and Competitive data from the Market Verification Task.
+
+    Your goal is to merge all of this into one single, comprehensive JSON object.
+    The keys in the JSON must match the following schema: {excel_schema}.
+    Ensure that no data is left behind and that numerical values are formatted correctly.
+  expected_output: >
+    A single unified JSON object containing all 50+ data points for the VC Master Sheet.
+  agent: market_intelligence_analyst
+  context:
+    - kyc_onboarding_task
+    - financial_extraction_task
+    - market_verification_task
