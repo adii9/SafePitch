@@ -3,7 +3,13 @@ kyc_onboarding_task:
     Analyze the {pitch_deck_content} and {email_body} to extract identity and administrative details
     for {company_name}.
 
-    You must specifically find and verify the following fields:
+    CRITICAL COMPANY VERIFICATION STEP:
+    Before extracting any data, you MUST use your search tools to find the real-world existence of {company_name}.
+    Look for an official website, LinkedIn page, or corporate registry.
+    If you cannot find any legitimate proof that {company_name} exists in the real world, you MUST immediately abort extraction and return exactly this JSON and nothing else:
+    {{"error": "No company with this name found."}}
+
+    If the company DOES exist, proceed to specifically find and verify the following fields:
     - Co Alias: Assign 'New' if not clearly stated.
     - Current Evaluation Stage: Assign 'Step 0 - Deal Sourcing'.
     - Company: The official name of the startup.
@@ -98,11 +104,15 @@ final_consolidation_task:
     2. Financial metrics from the Financial Extraction Task.
     3. Market and Competitive data from the Market Verification Task.
 
-    Your goal is to merge all of this into one single, comprehensive JSON object.
+    CRITICAL ERROR CHECK: If the KYC Task returned {{"error": "No company with this name found."}},
+    you MUST halt all merging and your final output must be exactly:
+    {{"error": "No company with this name found."}}
+
+    Otherwise, your goal is to merge all of this into one single, comprehensive JSON object.
     The keys in the JSON must match the following schema: {excel_schema}.
     Ensure that no data is left behind and that numerical values are formatted correctly.
   expected_output: >
-    A single unified JSON object containing all 50+ data points for the VC Master Sheet.
+    A single unified JSON object containing all 50+ data points for the VC Master Sheet. Or a JSON object with a single "error" key if the company does not exist.
   agent: market_intelligence_analyst
   context:
     - kyc_onboarding_task

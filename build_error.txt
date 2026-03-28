@@ -1,0 +1,148 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.00kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for public.ecr.aws/lambda/python:3.11
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 1.20kB done
+#4 DONE 0.0s
+
+#5 [1/8] FROM public.ecr.aws/lambda/python:3.11@sha256:fbd5a1cd4d5c16f69493def014300bb09fb02a47184b77ca70c4757ba691d261
+#5 resolve public.ecr.aws/lambda/python:3.11@sha256:fbd5a1cd4d5c16f69493def014300bb09fb02a47184b77ca70c4757ba691d261 done
+#5 DONE 0.0s
+
+#6 [2/8] RUN yum install -y gcc gcc-c++ make &&     yum clean all
+#6 CACHED
+
+#7 [3/8] RUN pip install uv
+#7 CACHED
+
+#8 [4/8] COPY pyproject.toml uv.lock /var/task/
+#8 CACHED
+
+#9 [5/8] COPY src /var/task/src
+#9 CACHED
+
+#10 [6/8] COPY knowledge /var/task/knowledge
+#10 CACHED
+
+#11 [7/8] RUN uv pip install --system --no-cache .
+#11 0.340 Using Python 3.11.14 environment at: /var/lang
+#11 1.633 Resolved 157 packages in 1.28s
+#11 1.640    Building safepitch @ file:///var/task
+#11 1.652 Downloading kubernetes (1.9MiB)
+#11 1.667 Downloading tokenizers (2.8MiB)
+#11 1.668 Downloading aiohttp (1.7MiB)
+#11 1.668 Downloading sympy (6.0MiB)
+#11 1.668 Downloading onnxruntime (5.5MiB)
+#11 1.668 Downloading pygments (1.2MiB)
+#11 1.669 Downloading pydantic-core (1.8MiB)
+#11 1.669 Downloading lxml (4.8MiB)
+#11 1.669 Downloading virtualenv (5.6MiB)
+#11 1.681 Downloading pdfminer-six (6.3MiB)
+#11 1.682 Downloading pylance (19.0MiB)
+#11 1.683 Downloading uv (20.6MiB)
+#11 1.683 Downloading pillow (5.9MiB)
+#11 1.683 Downloading tiktoken (1.1MiB)
+#11 1.683 Downloading pypdfium2 (3.4MiB)
+#11 1.683 Downloading grpcio (6.2MiB)
+#11 1.684 Downloading chromadb (18.0MiB)
+#11 1.684 Downloading cryptography (4.1MiB)
+#11 1.684 Downloading uvloop (3.6MiB)
+#11 4.182       Built safepitch @ file:///var/task
+#11 4.574  Downloaded tiktoken
+#11 4.644  Downloaded pygments
+#11 4.697    Building hf-xet==1.4.2
+#11 5.294    Building pyarrow==23.0.1
+#11 5.382  Downloaded aiohttp
+#11 5.470  Downloaded pydantic-core
+#11 5.565  Downloaded kubernetes
+#11 6.429  Downloaded tokenizers
+#11 7.086  Downloaded pypdfium2
+#11 7.271  Downloaded uvloop
+#11 7.735  Downloaded cryptography
+#11 8.303  Downloaded lxml
+#11 8.973  Downloaded onnxruntime
+#11 9.053  Downloaded virtualenv
+#11 9.219  Downloaded pillow
+#11 9.297  Downloaded sympy
+#11 9.300  Downloaded pdfminer-six
+#11 9.387  Downloaded grpcio
+#11 13.18  Downloaded chromadb
+#11 13.50  Downloaded pylance
+#11 13.81  Downloaded uv
+#11 14.36    Building numpy==2.4.3
+#11 17.19   × Failed to build `numpy==2.4.3`
+#11 17.19   ├─▶ The build backend returned an error
+#11 17.19   ╰─▶ Call to `mesonpy.build_wheel` failed (exit status: 1)
+#11 17.19 
+#11 17.19       [stdout]
+#11 17.19       + /tmp/.tmpHetgPt/builds-v0/.tmptT3bkS/bin/python
+#11 17.19       /tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src/vendored-meson/meson/meson.py
+#11 17.19       setup /tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src
+#11 17.19       /tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src/.mesonpy-2ayzgbne
+#11 17.19       -Dbuildtype=release -Db_ndebug=if-release -Db_vscrt=md
+#11 17.19       --native-file=/tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src/.mesonpy-2ayzgbne/meson-python-native-file.ini
+#11 17.19       The Meson build system
+#11 17.19       Version: 1.9.2
+#11 17.19       Source dir:
+#11 17.19       /tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src
+#11 17.19       Build dir:
+#11 17.19       /tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src/.mesonpy-2ayzgbne
+#11 17.19       Build type: native build
+#11 17.19       Project name: NumPy
+#11 17.19       Project version: 2.4.3
+#11 17.19       C compiler for the host machine: cc (gcc 7.3.1 "cc (GCC) 7.3.1 20180712
+#11 17.19       (Red Hat 7.3.1-18)")
+#11 17.19       C linker for the host machine: cc ld.bfd 2.29.1-31
+#11 17.19       C++ compiler for the host machine: c++ (gcc 7.3.1 "c++ (GCC) 7.3.1
+#11 17.19       20180712 (Red Hat 7.3.1-18)")
+#11 17.19       C++ linker for the host machine: c++ ld.bfd 2.29.1-31
+#11 17.19       Cython compiler for the host machine: cython (cython 3.2.4)
+#11 17.19       Host machine cpu family: aarch64
+#11 17.19       Host machine cpu: aarch64
+#11 17.19 
+#11 17.19       ../meson.build:25:4: ERROR: Problem encountered: NumPy requires GCC
+#11 17.19       >= 9.3
+#11 17.19 
+#11 17.19       A full log can be found at
+#11 17.19       /tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src/.mesonpy-2ayzgbne/meson-logs/meson-log.txt
+#11 17.19 
+#11 17.19       hint: This usually indicates a problem with the package or the build
+#11 17.19       environment.
+#11 17.19   help: `numpy` (v2.4.3) was included because `safepitch` (v0.1.0) depends on
+#11 17.19         `crewai` (v1.8.1) which depends on `chromadb` (v1.1.1) which depends
+#11 17.19         on `numpy`
+#11 ERROR: process "/bin/sh -c uv pip install --system --no-cache ." did not complete successfully: exit code: 1
+------
+ > [7/8] RUN uv pip install --system --no-cache .:
+17.19       >= 9.3
+17.19 
+17.19       A full log can be found at
+17.19       /tmp/.tmpHetgPt/sdists-v9/pypi/numpy/2.4.3/cd6OoPU2Tv8d4f9NEyYtv/src/.mesonpy-2ayzgbne/meson-logs/meson-log.txt
+17.19 
+17.19       hint: This usually indicates a problem with the package or the build
+17.19       environment.
+17.19   help: `numpy` (v2.4.3) was included because `safepitch` (v0.1.0) depends on
+17.19         `crewai` (v1.8.1) which depends on `chromadb` (v1.1.1) which depends
+17.19         on `numpy`
+------
+Dockerfile:20
+--------------------
+  18 |     # Install the package and its dependencies into the system python environment.
+  19 |     # Note: we do not use -e (editable) to avoid hatchling source-finding errors without actual sources.
+  20 | >>> RUN uv pip install --system --no-cache .
+  21 |     
+  22 |     # Copy the lambda handler script we created
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c uv pip install --system --no-cache ." did not complete successfully: exit code: 1
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/iabbu9yx72xje1lqtr67vijhm

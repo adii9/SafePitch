@@ -1,6 +1,7 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
+import os
 
 @CrewBase
 class SafepitchCrew():
@@ -10,11 +11,21 @@ class SafepitchCrew():
     agents_config = 'config/agents.yaml'
     tasks_config = 'config/tasks.yaml'
 
+    def __init__(self):
+        # We ensure API keys are set for LiteLLM (which uses GEMINI_API_KEY)
+        self.gemini_api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+        if not self.gemini_api_key:
+            raise ValueError("GEMINI_API_KEY or GOOGLE_API_KEY environment variable is not set")
+
+        # Ensure GEMINI_API_KEY is explicitly set for LiteLLM to pick up automatically
+        os.environ['GEMINI_API_KEY'] = self.gemini_api_key
+
     @agent
     def kyc_specialist(self) -> Agent:
         return Agent(
             config=self.agents_config['kyc_specialist'],
             tools=[SerperDevTool()], # Search for company incorporation/LinkedIn
+            llm="gemini/gemini-2.5-flash",
             verbose=True
         )
 
@@ -22,6 +33,7 @@ class SafepitchCrew():
     def financial_auditor(self) -> Agent:
         return Agent(
             config=self.agents_config['financial_auditor'],
+            llm="gemini/gemini-2.5-flash",
             # No search tools here to ensure data only comes from the LlamaParsed markdown
             verbose=True
         )
@@ -30,6 +42,7 @@ class SafepitchCrew():
     def market_intelligence_analyst(self) -> Agent:
         return Agent(
             config=self.agents_config['market_intelligence_analyst'],
+            llm="gemini/gemini-2.5-flash",
             tools=[SerperDevTool()], # Agent can now "read" Tracxn pages
             verbose=True
         )
