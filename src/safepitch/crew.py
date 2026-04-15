@@ -3,6 +3,14 @@ from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
 import os
 
+# MiniMax OpenAI-compatible configuration
+# Base URL: https://api.minimax.io/v1
+# Model: MiniMax-M2.7
+os.environ['OPENAI_API_BASE'] = os.environ.get('OPENAI_API_BASE', 'https://api.minimax.io/v1')
+os.environ['OPENAI_API_KEY'] = os.environ.get('MINIMAX_API_KEY', '')
+
+MINIMAX_MODEL = "openai/MiniMax-M2.7"
+
 @CrewBase
 class SafepitchCrew():
     """Safepitch Crew for automated Pitch Deck Auditing"""
@@ -12,20 +20,18 @@ class SafepitchCrew():
     tasks_config = 'config/tasks.yaml'
 
     def __init__(self):
-        # We ensure API keys are set for LiteLLM (which uses GEMINI_API_KEY)
-        self.gemini_api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
-        if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY or GOOGLE_API_KEY environment variable is not set")
-
-        # Ensure GEMINI_API_KEY is explicitly set for LiteLLM to pick up automatically
-        os.environ['GEMINI_API_KEY'] = self.gemini_api_key
+        # Ensure MiniMax is configured
+        minimax_key = os.environ.get('MINIMAX_API_KEY') or os.environ.get('OPENAI_API_KEY', '')
+        if minimax_key:
+            os.environ['OPENAI_API_KEY'] = minimax_key
+        os.environ['OPENAI_API_BASE'] = 'https://api.minimax.io/v1'
 
     @agent
     def kyc_specialist(self) -> Agent:
         return Agent(
             config=self.agents_config['kyc_specialist'],
             tools=[SerperDevTool()], # Search for company incorporation/LinkedIn
-            llm="gemini/gemini-2.5-flash",
+            llm=MINIMAX_MODEL,
             verbose=True
         )
 
@@ -33,7 +39,7 @@ class SafepitchCrew():
     def financial_auditor(self) -> Agent:
         return Agent(
             config=self.agents_config['financial_auditor'],
-            llm="gemini/gemini-2.5-flash",
+            llm=MINIMAX_MODEL,
             # No search tools here to ensure data only comes from the LlamaParsed markdown
             verbose=True
         )
@@ -42,8 +48,17 @@ class SafepitchCrew():
     def market_intelligence_analyst(self) -> Agent:
         return Agent(
             config=self.agents_config['market_intelligence_analyst'],
-            llm="gemini/gemini-2.5-flash",
+            llm=MINIMAX_MODEL,
             tools=[SerperDevTool()], # Agent can now "read" Tracxn pages
+            verbose=True
+        )
+
+    @agent
+    def claim_verification_specialist(self) -> Agent:
+        return Agent(
+            config=self.agents_config['claim_verification_specialist'],
+            tools=[SerperDevTool()],
+            llm=MINIMAX_MODEL,
             verbose=True
         )
 
@@ -68,13 +83,25 @@ class SafepitchCrew():
         )
 
     @task
+    def claim_verification_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['claim_verification_task'],
+            context=[
+                self.kyc_onboarding_task(),
+                self.financial_extraction_task(),
+                self.market_verification_task()
+            ],
+        )
+
+    @task
     def final_consolidation_task(self) -> Task:
         return Task(
             config=self.tasks_config['final_consolidation_task'],
             context=[
                 self.kyc_onboarding_task(),
                 self.financial_extraction_task(),
-                self.market_verification_task()
+                self.market_verification_task(),
+                self.claim_verification_task()
             ],
             output_json=None
         )

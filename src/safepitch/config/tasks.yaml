@@ -96,6 +96,17 @@ market_verification_task:
     A JSON object with deck-derived market/competitor data; Tracxn enriches only.
   agent: market_intelligence_analyst
 
+claim_verification_task:
+  description: >
+    Verify the financial claims (revenue, valuation, prior funding), leadership claims (Ex-Company, education),
+    and market claims (TAM, SAM, CAGR) for {company_name}.
+    Run AFTER kyc_onboarding_task, financial_extraction_task, and market_verification_task (include all 3 as context).
+    Use the provided SerperDevTool to perform web searches for verification.
+  expected_output: >
+    A structured verification_report JSON object with the following schema:
+    {{"summary": {{"total": 0, "verified": 0, "unverified": 0, "contradicted": 0, "truth_score": 0}}, "verified_claims": [], "unverified_claims": [], "contradicted_claims": [], "field_level_verification": {{}}}}
+  agent: claim_verification_specialist
+
   # Add this at the end of tasks.yaml
 final_consolidation_task:
   description: >
@@ -103,12 +114,14 @@ final_consolidation_task:
     1. Identity/Admin details from the KYC Task.
     2. Financial metrics from the Financial Extraction Task.
     3. Market and Competitive data from the Market Verification Task.
+    4. Verification results from the Claim Verification Task.
 
     CRITICAL ERROR CHECK: If the KYC Task returned {{"error": "No company with this name found."}},
     you MUST halt all merging and your final output must be exactly:
     {{"error": "No company with this name found."}}
 
     Otherwise, your goal is to merge all of this into one single, comprehensive JSON object.
+    Ingest the claim_verification_task output and merge the verification_status into each relevant field of the final JSON.
     The keys in the JSON must match the following schema: {excel_schema}.
     Ensure that no data is left behind and that numerical values are formatted correctly.
   expected_output: >
@@ -118,3 +131,4 @@ final_consolidation_task:
     - kyc_onboarding_task
     - financial_extraction_task
     - market_verification_task
+    - claim_verification_task
