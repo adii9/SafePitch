@@ -2,7 +2,7 @@
 
 > **Status:** Active development
 > **Brand:** SafeDeck (unified — PitchSafe retired)
-> **Last Updated:** 2026-04-15
+> **Last Updated:** 2026-04-16
 
 ---
 
@@ -426,3 +426,78 @@ SafeDeck Dashboard (frontend)
 - Google Sheets write-back is already wired through n8n
 - The Lambda is the core processing engine — improving it improves everything
 - Email ingestion is handled by n8n, not the Lambda — good separation of concerns
+
+---
+
+## Deployment Changes Log (2026-04-16)
+
+### Gemini → MiniMax Migration
+
+**Problem:** The CrewAI Lambda (`safepitch-function`) was hardcoded to use `gemini/gemini-2.5-flash`. The Gemini API key expired and the Lambda was returning "Failed to fetch" errors for all trial uploads.
+
+**Solution:** Migrated to MiniMax M2.7 via OpenAI-compatible API.
+
+**Changes:**
+- `crew.py`: Replaced `gemini/gemini-2.5-flash` with `minimax/MiniMax-M2.7`
+- `pyproject.toml`: Added `litellm>=1.0.0` and `fastapi>=0.100.0` dependencies
+- New Docker image: `482155310446.dkr.ecr.eu-north-1.amazonaws.com/safedeck/minimax:latest`
+
+### Lambda Functions (Current)
+
+| Function | Role | Status |
+|----------|------|--------|
+| `safepitch-parser-func` | Downloads deck from Drive, LlamaParse | Working |
+| `safepitch-function` | Old CrewAI Lambda (Gemini, deprecated) | Deprecated |
+| `safepitch-minimax` | New CrewAI Lambda with MiniMax | **Active** — used for all new deployments |
+| `user-sync` | Google OAuth user sync to DynamoDB | Working |
+
+### IAM Fix (Parser → CrewAI)
+
+**Problem:** `safepitch-parser-func` had no permission to invoke `safepitch-minimax`.
+
+**Fix:** Added inline IAM policy to `safepitch-parser-func-role`:
+```json
+{
+  "Effect": "Allow",
+  "Action": "lambda:InvokeFunction",
+  "Resource": "arn:aws:lambda:eu-north-1:482155310446:function:safepitch-minimax"
+}
+```
+
+### Environment Variables
+
+**Parser Lambda (`safepitch-parser-func`):**
+| Variable | Value |
+|----------|-------|
+| `CREWAI_LAMBDA_NAME` | `safepitch-minimax` (changed from `safepitch-function`) |
+| `LLAMA_CLOUD_API_KEY` | LlamaParse API key |
+| `GOOGLE_CREDENTIALS_SECRET_NAME` | `GoogleDriveServiceAccount` |
+
+**CrewAI Lambda (`safepitch-minimax`):**
+| Variable | Value |
+|----------|-------|
+| `MINIMAX_API_KEY` | MiniMax API key (`sk-cp-...`) |
+| `OPENAI_API_BASE` | `https://api.minimax.io/v1` |
+| `S3_BUCKET_NAME` | S3 bucket for flow state |
+| `DYNAMODB_TABLE_NAME` | DynamoDB table for audit storage |
+| `SAFE_DECK_USERS_TABLE` | `SafeDeckUsers` |
+
+### Known Issues / Todo
+
+- [ ] Docker builds on macOS hit memory limits — consider AWS CodeBuild for future builds
+- [ ] n8n SafeDeck-Engine workflow still uses `Google Gemini Chat Model` — should swap to MiniMax via OpenAI-compatible node
+- [ ] Frontend `testDeckUpload()` calls old `safepitch-function` URL — needs updating to new Lambda URL
+- [ ] Lambda cold start takes ~8-10s (CrewAI with 171 packages) — consider provisioned concurrency for production
+
+### Branch: `fix/trial-upload-minimax`
+
+All MiniMax migration changes committed to branch `fix/trial-upload-minimax` in:
+`/Users/adiimathur/Crew AI Builds/safepitch/`
+
+**To merge when ready:**
+```bash
+cd ~/Crew\ AI\ Builds/safepitch
+git checkout main
+git merge fix/trial-upload-minimax
+```
+
