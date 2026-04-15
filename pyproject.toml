@@ -9,6 +9,7 @@ dependencies = [
     "crewai[google-genai,tools]==1.8.1",
     "langchain-anthropic>=1.4.0",
     "langchain-google-genai>=0.0.1",
+    "litellm>=1.0.0",
 ]
 
 [project.scripts]
