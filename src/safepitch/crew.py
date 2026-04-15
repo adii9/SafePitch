@@ -9,7 +9,7 @@ import os
 os.environ['OPENAI_API_BASE'] = os.environ.get('OPENAI_API_BASE', 'https://api.minimax.io/v1')
 os.environ['OPENAI_API_KEY'] = os.environ.get('MINIMAX_API_KEY', '')
 
-MINIMAX_MODEL = "litellm/MiniMax-M2.7"
+MINIMAX_MODEL = "minimax/MiniMax-M2.7"
 
 @CrewBase
 class SafepitchCrew():
