@@ -3,6 +3,7 @@
 
 import sys
 import os
+import json
 from safepitch.crew import SafepitchCrew
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
@@ -72,7 +73,11 @@ class SafepitchFlow(Flow):
         # Save locally for review (fails silently in read-only lambda env if not /tmp)
         try:
             with open("test_audit_result.json", "w") as f:
-                f.write(str(audit_report))
+                # Properly serialize: if it's a string, write it directly; if dict, dump as JSON
+                if isinstance(audit_report, dict):
+                    f.write(json.dumps(audit_report, indent=2))
+                else:
+                    f.write(str(audit_report))
         except IOError:
             pass
             

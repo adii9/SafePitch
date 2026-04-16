@@ -189,12 +189,13 @@ def sync_db_to_s3(bucket_name):
 def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
     table = dynamodb.Table(table_name)
     try:
-        # Convert string to dict if needed (DynamoDB prefers Maps/Dicts for JSON)
+        # Enforce clean dict — if string, parse as JSON; if parse fails, wrap in dict
         if isinstance(final_audit, str):
             try:
                 final_audit = json.loads(final_audit)
-            except:
-                pass
+            except (json.JSONDecodeError, Exception):
+                # If it can't be parsed, wrap it as a raw text field
+                final_audit = {"raw_output": final_audit}
 
         item = {
             'id': str(uuid.uuid4()),

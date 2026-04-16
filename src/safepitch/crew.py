@@ -80,8 +80,7 @@ class SafepitchCrew():
     def market_verification_task(self) -> Task:
         return Task(
             config=self.tasks_config['market_verification_task'],
-            # This task outputs the final JSON that n8n will read
-            output_json=None
+            output_json=True
         )
 
     @task
@@ -105,7 +104,7 @@ class SafepitchCrew():
                 self.market_verification_task(),
                 self.claim_verification_task()
             ],
-            output_json=None
+            output_json=True
         )
 
     @crew
