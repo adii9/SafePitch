@@ -71,6 +71,22 @@ def download_file_from_drive(file_id, service):
         print(f"Error downloading file {file_id}: {str(e)}")
         raise e
 
+def build_response(status_code, body_dict):
+    """Build a response with proper CORS headers for API Gateway."""
+    body = json.dumps(body_dict)
+    # CORS headers - allow the origin dynamically or use * for all
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key",
+        "Access-Control-Allow-Methods": "OPTIONS,POST",
+        "Content-Type": "application/json"
+    }
+    return {
+        "statusCode": status_code,
+        "headers": headers,
+        "body": body
+    }
+
 def lambda_handler(event, context):
     print("Received event:", event)
 
@@ -87,18 +103,19 @@ def lambda_handler(event, context):
     company_name = body.get('company_name', 'Unknown')
     file_id = body.get('file_id')
     email_body = body.get('email_body', '')
+    tenant_slug = body.get('tenant_slug', 'default')
 
     if not file_id:
-        return {"statusCode": 400, "body": json.dumps({"error": "Missing file_id"})}
+        return build_response(400, {"error": "Missing file_id"})
 
     # 2. Get environment variables
     llama_key = os.environ.get("LLAMA_CLOUD_API_KEY", "").strip()
     crewai_lambda_name = os.environ.get("CREWAI_LAMBDA_NAME")
 
     if not llama_key:
-        return {"statusCode": 500, "body": json.dumps({"error": "Missing LLAMA_CLOUD_API_KEY"})}
+        return build_response(500, {"error": "Missing LLAMA_CLOUD_API_KEY"})
     if not crewai_lambda_name:
-        return {"statusCode": 500, "body": json.dumps({"error": "Missing CREWAI_LAMBDA_NAME"})}
+        return build_response(500, {"error": "Missing CREWAI_LAMBDA_NAME"})
 
     temp_file_path = None
 
@@ -126,6 +143,7 @@ def lambda_handler(event, context):
 
         # 6. Prepare Payload for Lambda 2 (CrewAI)
         payload_for_crewai = {
+            "tenant_slug": tenant_slug,
             "company_name": company_name,
             "email_body": email_body,
             "pitch_deck_content": pitch_deck_markdown
@@ -149,17 +167,11 @@ def lambda_handler(event, context):
 
         print(f"Successfully triggered CrewAI Lambda. Status code: {response.get('StatusCode')}")
 
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'message': f'Successfully parsed document and triggered CrewAI for {company_name}'})
-        }
+        return build_response(200, {'message': f'Successfully parsed document and triggered CrewAI for {company_name}'})
 
     except Exception as e:
         print(f"FAILED: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        return build_response(500, {'error': str(e)})
 
     finally:
         # Always clean up the temp file in Lambda /tmp directory
