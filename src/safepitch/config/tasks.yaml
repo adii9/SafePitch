@@ -96,25 +96,65 @@ market_verification_task:
     A JSON object with deck-derived market/competitor data; Tracxn enriches only.
   agent: market_intelligence_analyst
 
-  # Add this at the end of tasks.yaml
+claim_verification_task:
+  description: >
+    Verify the financial claims (revenue, valuation, prior funding), leadership claims (Ex-Company, education),
+    and market claims (TAM, SAM, CAGR) for {company_name}.
+    Run AFTER kyc_onboarding_task, financial_extraction_task, and market_verification_task (include all 3 as context).
+    Use the provided SerperDevTool to perform web searches for verification.
+  expected_output: >
+    A structured verification_report JSON object with the following schema:
+    {{"summary": {{"total": 0, "verified": 0, "unverified": 0, "contradicted": 0, "truth_score": 0}}, "verified_claims": [], "unverified_claims": [], "contradicted_claims": [], "field_level_verification": {{}}}}
+  agent: claim_verification_specialist
+
 final_consolidation_task:
   description: >
-    Review all the information gathered for {company_name} across the previous tasks:
-    1. Identity/Admin details from the KYC Task.
-    2. Financial metrics from the Financial Extraction Task.
-    3. Market and Competitive data from the Market Verification Task.
+    Merge all outputs from previous tasks into a structured two-part JSON response.
+
+    PREVIOUS TASK OUTPUTS TO MERGE:
+    1. KYC Task → identity/admin details (Co Alias, Company, Website, Location, Sector, etc.)
+    2. Financial Extraction Task → financial metrics (Revenue, EBITDA, Valuation, Investors, etc.)
+    3. Market Verification Task → market data (TAM, SAM, Competitors, CAGR, etc.)
+    4. Claim Verification Task → verification_report with verified/unverified/contradicted claims + red flags
 
     CRITICAL ERROR CHECK: If the KYC Task returned {{"error": "No company with this name found."}},
     you MUST halt all merging and your final output must be exactly:
     {{"error": "No company with this name found."}}
 
-    Otherwise, your goal is to merge all of this into one single, comprehensive JSON object.
-    The keys in the JSON must match the following schema: {excel_schema}.
-    Ensure that no data is left behind and that numerical values are formatted correctly.
+    OUTPUT STRUCTURE — produce exactly this two-part JSON:
+    {{
+      "audit_data": {{
+        // ← All 50-column Excel schema fields from KYC + Financial + Market tasks.
+        // Keys must match: Co Alias, Current Evaluation Stage, Company, Name of Outside Source,
+        // AWE Member, Date Received, Website, Location City, Sector, Industry cluster, Product Offering,
+        // Any IP - Patent Details?, Unique Differentiator?, Business pitch, Problem / Solution,
+        // Promoter Name, Email, Phone, Promoter LinkedIn, Revenue Model?, B2B/B2C/B2B2C/B2G?,
+        // Revenue (Year), EBITDA, Unit Economics, Current Round Ask, Current Investors,
+        // Current Round Exp Valuation, EV/Revenue (current FY), EV/Revenue (Next FY),
+        // Prior Funding?, Total Prior Amount, Prior Round Investors, Prior Round Valuation,
+        // Cap Table, Grants received, Valuation Increase (%), Total Market Size,
+        // Addressable Market Size, Industry - CAGR, Industry Composition, Co. Revenue CAGR,
+        // Sales Channels, Competitor Name, Country, Total Fund raised,
+        // Last post-money valuation, Revenue (Amount), Senior Team, Prior Experience,
+        // Educational Experience, Year of incorporation, Place of Incorporation, Full Address
+      }},
+      "claim_verification": {{
+        // ← Paste the ENTIRE verification_report JSON from the Claim Verification Task here unchanged.
+        // Include: summary, verified_claims, unverified_claims, contradicted_claims,
+        // field_level_verification, critical_red_flags, overall_risk_assessment
+      }}
+    }}
+
+    RULES:
+    - audit_data: flatten all KYC + Financial + Market task outputs into the 50-column schema
+    - claim_verification: paste the full verification_report from claim_verification_task verbatim
+    - If any field is missing, use "Not stated"
+    - Ensure numerical values are formatted correctly (no stray text in number fields)
   expected_output: >
-    A single unified JSON object containing all 50+ data points for the VC Master Sheet. Or a JSON object with a single "error" key if the company does not exist.
+    A two-part JSON object with exactly two keys: "audit_data" (flat 50-column schema) and "claim_verification" (full verification report). Or a JSON object with a single "error" key if the company does not exist.
   agent: market_intelligence_analyst
   context:
     - kyc_onboarding_task
     - financial_extraction_task
     - market_verification_task
+    - claim_verification_task
