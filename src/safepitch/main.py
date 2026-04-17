@@ -3,7 +3,6 @@
 
 import sys
 import os
-import json
 from safepitch.crew import SafepitchCrew
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
@@ -43,11 +42,11 @@ class SafepitchFlow(Flow):
 
         # Fetch inputs passed via state if any (for AWS Lambda). Otherwise mock.
         provided_inputs = self.state.get('inputs', {})
-        
+
         inputs = {
             'company_name': provided_inputs.get('company_name', 'Edutech Global'),
             'pitch_deck_content': provided_inputs.get('pitch_deck_content', mock_pitch_deck_content),
-            'email_body': provided_inputs.get('email_body', 
+            'email_body': provided_inputs.get('email_body',
                 "Subject: Pitch Deck - Edutech Global. "
                 "Hi, I'm Jane. We are building an AI-led learning platform. "
                 "LinkedIn: linkedin.com/in/janedoe-example"
@@ -73,14 +72,10 @@ class SafepitchFlow(Flow):
         # Save locally for review (fails silently in read-only lambda env if not /tmp)
         try:
             with open("test_audit_result.json", "w") as f:
-                # Properly serialize: if it's a string, write it directly; if dict, dump as JSON
-                if isinstance(audit_report, dict):
-                    f.write(json.dumps(audit_report, indent=2))
-                else:
-                    f.write(str(audit_report))
+                f.write(str(audit_report))
         except IOError:
             pass
-            
+
         print("\n--- Final step data successfully persisted! ---")
         return {"audit_report": audit_report}
 

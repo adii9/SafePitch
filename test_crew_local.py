@@ -16,8 +16,7 @@ import pdfplumber
 os.environ["HOME"] = "/tmp"  # CrewAI writes to ~/.crewai, keep it in /tmp
 
 # MiniMax config
-os.environ["OPENAI_API_BASE"] = "https://api.minimax.io/v1"
-os.environ["OPENAI_API_KEY"] = os.environ.get("MINIMAX_API_KEY", "")
+os.environ["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY", "")
 os.environ["SERPER_API_KEY"] = os.environ.get("SERPER_API_KEY", "")
 
 # ── PDF extraction ──
