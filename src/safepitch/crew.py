@@ -1,6 +1,7 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
+from safepitch.models import AuditData, VerificationReport, FinalAuditOutput, ErrorOutput
 import os
 
 # MiniMax OpenAI-compatible configuration
@@ -91,6 +92,7 @@ class SafepitchCrew():
                 self.financial_extraction_task(),
                 self.market_verification_task()
             ],
+            output_json=VerificationReport,
         )
 
     @task
@@ -103,6 +105,7 @@ class SafepitchCrew():
                 self.market_verification_task(),
                 self.claim_verification_task()
             ],
+            output_json=FinalAuditOutput,
         )
 
     @crew
