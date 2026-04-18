@@ -62,74 +62,22 @@ class VerificationReport(BaseModel):
     overall_risk_assessment: OverallRiskAssessment
 
 
-class AuditData(BaseModel):
-    """Flat 50-column schema — all fields optional since deck data may be missing."""
-    # Identity / Admin
-    co_alias: Optional[str] = None
-    current_evaluation_stage: Optional[str] = None
-    company: Optional[str] = None
-    name_of_outside_source: Optional[str] = None
-    awe_member: Optional[str] = None
-    date_received: Optional[str] = None
-    website: Optional[str] = None
-    location_city: Optional[str] = None
-    country: Optional[str] = None
-    place_of_incorporation: Optional[str] = None
-    sector: Optional[str] = None
-    industry_cluster: Optional[str] = None
-    product_offering: Optional[str] = None
-    any_ip_patent_details: Optional[str] = None
-    unique_differentiator: Optional[str] = None
-    business_pitch: Optional[str] = None
-    problem_solution: Optional[str] = None
-    promoter_name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    promoter_linkedin: Optional[str] = None
-    year_of_incorporation: Optional[str] = None
-    full_address: Optional[str] = None
-    social_developmental_impact: Optional[str] = None
+from pydantic import BaseModel, Field, create_model
 
-    # Financial
-    revenue_model: Optional[str] = None
-    revenue_year: Optional[str] = None
-    ebitda: Optional[str] = None
-    unit_economics: Optional[str] = None
-    current_round_ask: Optional[str] = None
-    current_investors: Optional[str] = None
-    ev_revenue_current_fy: Optional[str] = None
-    ev_revenue_next_fy: Optional[str] = None
-    prior_funding: Optional[str] = None
-    total_prior_amount: Optional[str] = None
-    prior_round_investors: Optional[str] = None
-    prior_round_valuation: Optional[str] = None
-    cap_table: Optional[str] = None
-    grants_received: Optional[str] = None
-    valuation_increase_pct: Optional[str] = None
-
-    # Market
-    total_market_size: Optional[str] = None
-    addressable_market_size: Optional[str] = None
-    industry_cagr: Optional[str] = None
-    industry_composition: Optional[str] = None
-    co_revenue_cagr: Optional[str] = None
-    sales_channels: Optional[str] = None
-    competitor_name: Optional[str] = None
-    total_fund_raised: Optional[str] = None
-    last_post_money_valuation: Optional[str] = None
-    revenue_amount: Optional[str] = None
-
-    # Team
-    senior_team: Optional[str] = None
-    prior_experience: Optional[str] = None
-    educational_experience: Optional[str] = None
-
-
-class FinalAuditOutput(BaseModel):
-    """Two-part output: audit_data (Excel schema) + claim_verification (fraud report)."""
-    audit_data: AuditData
-    claim_verification: VerificationReport
-
+def create_dynamic_model(model_name: str, fields_list: List[Dict[str, str]]) -> type[BaseModel]:
+    """
+    Dynamically creates a Pydantic model for CrewAI based on a list of field definitions.
+    fields_list should be a list of dictionaries with 'key' and 'label'.
+    """
+    fields = {}
+    for f in fields_list:
+        key = f.get("key")
+        label = f.get("label")
+        if key:
+            # We make all fields optional strings by default since the deck might be missing data
+            fields[key] = (Optional[str], Field(default=None, description=label))
+            
+    return create_model(model_name, **fields)
 
 class ErrorOutput(BaseModel):
     """Error response when company is not found."""

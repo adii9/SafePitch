@@ -13,22 +13,38 @@ class SafepitchFlow(Flow):
         """
         Local test runner for the Safepitch 40-Column Verified Audit.
         """
-        excel_schema = (
-            "Co Alias, Current Evaluation Stage, Company, Name of Outside Source, "
-            "AWE Member, Date Received, Website, Location City, Sector, Industry cluster, "
-            "Product Offering, Any IP - Patent Details?, Unique Differentiator?, "
-            "Business pitch, Problem / Solution, Promoter Name, Email, Phone, "
-            "Promoter LinkedIn, Revenue Model?, B2B/B2C/B2B2C/B2G?, Revenue (Year), "
-            "EBITDA, Unit Economics, Current Round Ask, Current Investors, "
-            "Current Round Exp Valuation, EV/Revenue (current FY), EV/Revenue (Next FY), "
-            "Prior Funding?, Total Prior Amount, Prior Round Investors, Prior Round Valuation, "
-            "Cap Table, Grants received, Valuation Increase (%), Total Market Size, "
-            "Addressable Market Size, Industry - CAGR, Industry Composition, "
-            "Co. Revenue CAGR, Sales Channels, Competitor Name, Country, Total Fund raised, "
-            "Last post-money valuation, Revenue (Amount), Senior Team, Prior Experience, "
-            "Educational Experience, Year of incorporation, Place of Incorporation, Full Address"
-        )
+        client_schema = {
+            "kyc": [
+                {"key": "promoter_name", "label": "Promoter / Founder Name"},
+                {"key": "promoter_linkedin", "label": "Founder LinkedIn URL"},
+                {"key": "founder_background", "label": "Founder Background"},
+                {"key": "founder_education", "label": "Founder Education"},
+                {"key": "product_stage", "label": "Product Stage"},
+                {"key": "product_differentiation", "label": "Product Differentiation"},
+                {"key": "tech_stack", "label": "Tech Stack"}
+            ],
+            "financial": [
+                {"key": "revenue", "label": "Revenue"},
+                {"key": "revenue_growth_rate", "label": "Revenue Growth Rate"},
+                {"key": "burn_rate", "label": "Burn Rate"},
+                {"key": "runway", "label": "Runway (months)"},
+                {"key": "current_round", "label": "Current Fundraising Round"},
+                {"key": "funding_stage", "label": "Funding Stage"},
+                {"key": "amount_raising", "label": "Amount Raising"},
+                {"key": "pre_money_valuation", "label": "Pre-money Valuation"}
+            ],
+            "market": [
+                {"key": "tam", "label": "TAM (Total Addressable Market)"},
+                {"key": "sam", "label": "SAM (Serviceable Addressable Market)"},
+                {"key": "som", "label": "SOM (Serviceable Obtainable Market)"},
+                {"key": "competitors_listed", "label": "Competitors Listed"},
+                {"key": "competitive_landscape", "label": "Competitive Landscape"}
+            ]
+        }
 
+        def format_fields(fields: list) -> str:
+            return "\n".join([f"- {f['label']} (JSON key: {f['key']})" for f in fields])
+        
         mock_pitch_deck_content = """
         # Financial Overview
         The company is seeking $2M at a $10M pre-money valuation.
@@ -39,7 +55,7 @@ class SafepitchFlow(Flow):
         Founders: Jane Doe (Ex-Google) and John Smith (IIT Alumni).
         Company incorporated in 2022 in Bangalore, India.
         """
-
+        
         # Fetch inputs passed via state if any (for AWS Lambda). Otherwise mock.
         provided_inputs = self.state.get('inputs', {})
 
@@ -51,13 +67,15 @@ class SafepitchFlow(Flow):
                 "Hi, I'm Jane. We are building an AI-led learning platform. "
                 "LinkedIn: linkedin.com/in/janedoe-example"
             ),
-            'excel_schema': excel_schema
+            'dynamic_kyc_fields': format_fields(client_schema['kyc']),
+            'dynamic_financial_fields': format_fields(client_schema['financial']),
+            'dynamic_market_fields': format_fields(client_schema['market']),
         }
 
         print(f"--- Starting Verified Audit for {inputs['company_name']} ---")
 
         # Initialize and kickoff the crew
-        result = SafepitchCrew().crew().kickoff(inputs=inputs)
+        result = SafepitchCrew(client_schema=client_schema).crew().kickoff(inputs=inputs)
         return result.raw
 
     @listen(run_crew)
