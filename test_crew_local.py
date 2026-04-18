@@ -20,7 +20,7 @@ load_dotenv()
 os.environ["HOME"] = "/tmp"  # CrewAI writes to ~/.crewai, keep it in /tmp
 
 # MiniMax config
-os.environ["GEMINI_API_KEY"] = 'AIzaSyAIoT92WubCu22lzaXFGCSwEpY0tKRNsZ0'
+os.environ["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY", "")
 os.environ["SERPER_API_KEY"] = os.environ.get("SERPER_API_KEY", "")
 
 # ── PDF extraction ──
