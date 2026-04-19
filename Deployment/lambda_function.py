@@ -309,22 +309,24 @@ def lambda_handler(event, context):
         flow.state['inputs']['evaluation_criteria'] = tenant_cfg['evaluation_criteria']
         print(f"Using tenant-specific evaluation_criteria for {tenant_slug}")
 
-    # Inject rating_criteria text if the tenant has a non-empty rating_template
+    # Inject rating_criteria text if the tenant has a non-empty rating_template.
+    # Weights are 1-10 importance scores, not point allocations.
     rating_template = tenant_cfg.get('rating_template') or {}
     weights = rating_template.get('weights', {})
     if weights:
-        total_points = sum(weights.values())
         criteria_lines = []
-        for field, points in weights.items():
-            pct = round((points / total_points) * 100) if total_points else 0
-            criteria_lines.append(f"- {field}: {points} points ({pct}%)")
+        for field, weight in weights.items():
+            # weight is a 1–10 importance score — describe it in plain English
+            importance = "very high" if weight >= 8 else "high" if weight >= 6 else "moderate" if weight >= 4 else "low"
+            criteria_lines.append(f"- {field}: {weight}/10 ({importance} importance)")
         rating_criteria_text = (
-            "Evaluate the startup based on the following criteria and weights:\n\n"
+            "Evaluate the startup holistically out of 10 based on the following criteria. "
+            "Each criterion has an importance weight — higher weight means that factor should carry more influence in your final score:\n\n"
             + "\n".join(criteria_lines)
-            + "\n\nProvide a score out of 10 and reasoning."
+            + "\n\nProvide a single overall score out of 10 and a brief reasoning explaining the key strengths and weaknesses."
         )
         flow.state['inputs']['rating_criteria'] = rating_criteria_text
-        print(f"rating_criteria injected for {tenant_slug} ({len(weights)} weighted fields, total {total_points} pts)")
+        print(f"rating_criteria injected for {tenant_slug} ({len(weights)} weighted fields)")
 
     # 5. Execute the flow
     flow_execution_failed = False
