@@ -1,79 +1,73 @@
-kyc_onboarding_task:
+pitch_deck_extraction_task:
   description: >
-    Analyze the {pitch_deck_content} and {email_body} to extract identity and administrative details
-    for {company_name}.
+    Analyze the {pitch_deck_content} and {email_body} for {company_name} to extract all data requested
+    in the following fields:
+    KYC Fields: {dynamic_kyc_fields}
+    Financial Fields: {dynamic_financial_fields}
+    Market Fields: {dynamic_market_fields}
 
-    CRITICAL COMPANY VERIFICATION STEP:
-    Before extracting any data, you MUST use your search tools to find the real-world existence of {company_name}.
-    Look for an official website, LinkedIn page, or corporate registry.
-    If you cannot find any legitimate proof that {company_name} exists in the real world, you MUST immediately abort extraction and return exactly this JSON and nothing else:
-    {{"error": "No company with this name found."}}
-
-    If the company DOES exist, proceed to specifically find and verify the following fields:
-    {dynamic_kyc_fields}
-
-    If any data is missing in the {pitch_deck_content}, use your search tools to find the
-    Company Website and LinkedIn details.
-
-    Extraction rules:
-    - Prefer explicit text from the pitch deck (leadership slide, team bios, profiles).
-    - If a role is listed without name, do not infer a name.
-    - If experience or education is missing for a person, write "Not stated".
+    If a field is not present in the deck, write "Not stated".
+    Focus ONLY on the provided documents. Do not search the web.
   expected_output: >
-    A JSON object containing all administrative and company identity data.
-  agent: kyc_specialist
+    A JSON object containing the extracted data exactly as claimed in the pitch deck.
+  agent: extraction_specialist
 
-financial_extraction_task:
+internet_verification_task:
   description: >
-    Examine the tables and content in {pitch_deck_content} to extract precise financial performance
-    and investment metrics for {company_name}.
-
-    Extract the following specific fields:
-    {dynamic_financial_fields}
-
-    Focus heavily on the markdown tables provided by LlamaParse to ensure numerical accuracy.
-    If data is not explicitly stated, return "Not stated".
+    Take the claims extracted in the previous task for {company_name} and verify them.
+    1. Search the web targeting sites like Tracxn, PitchBook, and VCCEdge. If paywalled, use general web searches.
+    2. Override "Not stated" fields if you find the actual data online.
+    3. You MUST attach the exact Source URL where you verified or found EACH data point. 
+    Instead of a flat list, structure each point as an object with 'value' and 'source_url'.
   expected_output: >
-    A JSON object containing all financial audit and investment data.
-  agent: financial_auditor
+    A JSON object where each key maps to an object like: {{"value": "the data", "source_url": "the link"}}.
+  agent: osint_investigator
+  context:
+    - pitch_deck_extraction_task
 
-market_verification_task:
+discrepancy_analysis_task:
   description: >
-    Verify the market size and competitive landscape for {company_name}.
-
-    DECK-FIRST PROTOCOL (STRICT):
-    1. Extract TAM/SAM, market composition, and competitor names directly from the pitch deck
-       (e.g., market sizing slide, competitive matrix). These MUST be primary values.
-    2. Use Tracxn only to validate competitor intelligence or enrich with valuation/funding.
-       Do NOT replace deck-listed competitors with external names.
-    3. Use external web searches for TAM/SAM/CAGR ONLY when the deck is missing those fields.
-    4. Always tag each market item with Source: "Deck" or "Tracxn".
-
-    Required Fields:
-    {dynamic_market_fields}
+    Compare the initial Pitch Deck Claims against the Web Verified Data for {company_name}.
+    Note that the Web Verified Data will have a {"value": ..., "source_url": ...} structure. You should compare against the 'value'.
+    Generate two lists:
+    - Red Flags: Where internet data contradicts the pitch deck (e.g. false claims, inflated metrics, missing registrations).
+    - Green Flags: Verified strong points (e.g. verified founder exits, strong verified traction).
   expected_output: >
-    A JSON object with deck-derived market/competitor data; Tracxn enriches only.
-  agent: market_intelligence_analyst
+    A JSON object with two arrays: "red_flags" and "green_flags".
+  agent: risk_analyst
+  context:
+    - pitch_deck_extraction_task
+    - internet_verification_task
 
-  # Add this at the end of tasks.yaml
+startup_rating_task:
+  description: >
+    Review all gathered data, red flags, and green flags for {company_name}.
+    Then, evaluate the startup based on the following VC Rating Criteria:
+    {rating_criteria}
+
+    Calculate the numerical score based on the weights/points in the criteria.
+    Provide the final score and a paragraph explaining the reasoning for the score.
+  expected_output: >
+    A JSON object with "score" (number) and "reasoning" (string).
+  agent: ic_scoring_agent
+  context:
+    - pitch_deck_extraction_task
+    - internet_verification_task
+    - discrepancy_analysis_task
+
 final_consolidation_task:
   description: >
-    Review all the information gathered for {company_name} across the previous tasks:
-    1. Identity/Admin details from the KYC Task.
-    2. Financial metrics from the Financial Extraction Task.
-    3. Market and Competitive data from the Market Verification Task.
-
-    CRITICAL ERROR CHECK: If the KYC Task returned {{"error": "No company with this name found."}},
-    you MUST halt all merging and your final output must be exactly:
-    {{"error": "No company with this name found."}}
-
-    Otherwise, your goal is to merge all of this into one single, comprehensive JSON object.
-    The keys in the JSON must match the following schema: {excel_schema}.
-    Ensure that no data is left behind and that numerical values are formatted correctly.
+    Merge all the information gathered across tasks into one final JSON object.
+    It must contain the following top-level keys:
+    1. "extracted_deck_data": The original claims from the deck.
+    2. "internet_verified_data": The fact-checked data, where EVERY key maps to an object containing "value" and "source_url".
+    3. "risk_analysis": The red and green flags.
+    4. "scoring": The final numerical score and reasoning.
   expected_output: >
-    A single unified JSON object containing all 50+ data points for the VC Master Sheet. Or a JSON object with a single "error" key if the company does not exist.
-  agent: market_intelligence_analyst
+    A comprehensive, unified JSON object containing the extracted data, verified data (with nested sources), flags, score, and reasoning.
+  agent: extraction_specialist
   context:
-    - kyc_onboarding_task
-    - financial_extraction_task
-    - market_verification_task
+    - pitch_deck_extraction_task
+    - internet_verification_task
+    - discrepancy_analysis_task
+    - startup_rating_task
