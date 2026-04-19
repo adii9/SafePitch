@@ -13,7 +13,8 @@ class SafepitchFlow(Flow):
         """
         Local test runner for the Safepitch 40-Column Verified Audit.
         """
-        client_schema = {
+        # --- Hardcoded fallback schema ---
+        _fallback_schema = {
             "kyc": [
                 {"key": "promoter_name", "label": "Promoter / Founder Name"},
                 {"key": "promoter_linkedin", "label": "Founder LinkedIn URL"},
@@ -42,6 +43,29 @@ class SafepitchFlow(Flow):
             ]
         }
 
+        # --- Build client_schema dynamically from tenant evaluation_criteria ---
+        # The Lambda handler injects evaluation_criteria into flow.state['inputs']
+        # during onboarding. If it's present and has must_have fields, we use those
+        # for the kyc section; financial and market sections stay as the fallback.
+        provided_inputs = self.state.get('inputs', {})
+        evaluation_criteria = provided_inputs.get('evaluation_criteria')
+
+        if evaluation_criteria and evaluation_criteria.get('must_have'):
+            dynamic_kyc = [
+                {"key": field["key"], "label": field["label"]}
+                for field in evaluation_criteria["must_have"]
+                if "key" in field and "label" in field
+            ]
+            client_schema = {
+                "kyc": dynamic_kyc,
+                "financial": _fallback_schema["financial"],
+                "market": _fallback_schema["market"],
+            }
+            print(f"Using dynamic evaluation_criteria: {len(dynamic_kyc)} must-have fields loaded.")
+        else:
+            client_schema = _fallback_schema
+            print("No evaluation_criteria in state — using hardcoded fallback schema.")
+
         def format_fields(fields: list) -> str:
             return "\n".join([f"- {f['label']} (JSON key: {f['key']})" for f in fields])
         
@@ -56,9 +80,7 @@ class SafepitchFlow(Flow):
         Company incorporated in 2022 in Bangalore, India.
         """
         
-        # Fetch inputs passed via state if any (for AWS Lambda). Otherwise mock.
-        provided_inputs = self.state.get('inputs', {})
-
+        # 'provided_inputs' already resolved above when building client_schema.
         inputs = {
             'company_name': provided_inputs.get('company_name', 'Edutech Global'),
             'pitch_deck_content': provided_inputs.get('pitch_deck_content', mock_pitch_deck_content),
@@ -71,6 +93,12 @@ class SafepitchFlow(Flow):
             'dynamic_financial_fields': format_fields(client_schema['financial']),
             'dynamic_market_fields': format_fields(client_schema['market']),
         }
+
+        # Pass rating_criteria through to the crew if the tenant provided one
+        rating_criteria = provided_inputs.get('rating_criteria')
+        if rating_criteria:
+            inputs['rating_criteria'] = rating_criteria
+            print("rating_criteria injected into crew inputs.")
 
         print(f"--- Starting Verified Audit for {inputs['company_name']} ---")
 
