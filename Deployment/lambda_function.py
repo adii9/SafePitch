@@ -95,9 +95,13 @@ def _default_config(tenant_id):
 
 def apply_rating_template(audit_result, rating_template):
     """
-    Apply per-tenant rating_template to audit_result.
-    Falls back to no-op if rating_template is None.
-    
+    Always extracts _overall_score from audit_result['scoring']['score'] so the
+    dashboard can reliably find the AI score regardless of tenant config.
+
+    If a rating_template with a 'weights' dict is provided, also calculates a
+    weighted composite score by looking up each weight key inside
+    audit_result['extracted_deck_data'] (not the top level).
+
     Expected rating_template structure (set during onboarding):
         {
             "weights": {
@@ -109,6 +113,24 @@ def apply_rating_template(audit_result, rating_template):
             "thresholds": { ... }
         }
     """
+    # --- Always extract the overall AI score ---
+    try:
+        scoring = audit_result.get('scoring', {})
+        if isinstance(scoring, str):
+            try:
+                scoring = json.loads(scoring)
+            except Exception:
+                scoring = {}
+        overall_score = scoring.get('score')
+        if overall_score is not None:
+            audit_result['_overall_score'] = float(overall_score)
+            print(f"Overall score extracted: {audit_result['_overall_score']}")
+        else:
+            print("Warning: 'score' key not found inside audit_result['scoring'].")
+    except Exception as e:
+        print(f"Error extracting overall score: {e}")
+
+    # --- Apply per-tenant composite score if a rating_template is provided ---
     if not rating_template:
         return audit_result
 
@@ -117,24 +139,20 @@ def apply_rating_template(audit_result, rating_template):
         if not weights:
             return audit_result
 
-        # Calculate composite score if audit_result has relevant fields
+        # Weight keys are looked up inside 'extracted_deck_data', not the top level
+        extracted = audit_result.get('extracted_deck_data', {})
+        if isinstance(extracted, str):
+            try:
+                extracted = json.loads(extracted)
+            except Exception:
+                extracted = {}
+
         score_fields = {}
         total_weight = 0
         weighted_sum = 0
 
         for key, weight in weights.items():
-            # Try to find this field in the audit result
-            val = None
-            # Check top-level
-            if key in audit_result:
-                val = audit_result[key]
-            # Check nested (e.g. audit_result["Revenue (Year)"]["FY24A"])
-            else:
-                for field, field_val in audit_result.items():
-                    if isinstance(field_val, dict) and key in field_val:
-                        val = field_val[key]
-                        break
-
+            val = extracted.get(key)
             if val is not None:
                 try:
                     numeric_val = float(val)
@@ -151,7 +169,7 @@ def apply_rating_template(audit_result, rating_template):
             audit_result['_rating_template_applied'] = list(weights.keys())
             print(f"Composite score calculated: {composite_score}")
         else:
-            print("No matching fields found for rating template weights.")
+            print("No matching fields found for rating template weights inside extracted_deck_data.")
 
         return audit_result
 
@@ -194,15 +212,34 @@ def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
             try:
                 final_audit = json.loads(final_audit)
             except (json.JSONDecodeError, Exception):
-                # If it can't be parsed, wrap it as a raw text field
                 final_audit = {"raw_output": final_audit}
 
+        # Extract each top-level section as a separate DynamoDB column
+        # so the dashboard can query individual fields without parsing a blob.
+        extracted_deck_data   = final_audit.get('extracted_deck_data', {})
+        internet_verified_data = final_audit.get('internet_verified_data', {})
+        risk_analysis         = final_audit.get('risk_analysis', {})
+        scoring               = final_audit.get('scoring', {})
+
+        # Pull the numeric score to its own top-level attribute for easy filtering
+        overall_score = final_audit.get('_overall_score')
+        if overall_score is None:
+            try:
+                overall_score = float(scoring.get('score', 0))
+            except (TypeError, ValueError):
+                overall_score = None
+
         item = {
-            'id': str(uuid.uuid4()),
-            'tenant_id': tenant_id,
-            'company_name': company_name or 'Unknown',
-            'timestamp': datetime.utcnow().isoformat(),
-            'audit_result': final_audit
+            'id':                    str(uuid.uuid4()),
+            'tenant_id':             tenant_id,
+            'company_name':          company_name or 'Unknown',
+            'timestamp':             datetime.utcnow().isoformat(),
+            # Separate columns — one per pipeline output section
+            'overall_score':         overall_score,
+            'extracted_deck_data':   extracted_deck_data,
+            'internet_verified_data': internet_verified_data,
+            'risk_analysis':         risk_analysis,
+            'scoring':               scoring,
         }
         table.put_item(Item=item)
         print(f"Successfully saved results to DynamoDB table: {table_name} (tenant_id={tenant_id})")
@@ -272,6 +309,23 @@ def lambda_handler(event, context):
         flow.state['inputs']['evaluation_criteria'] = tenant_cfg['evaluation_criteria']
         print(f"Using tenant-specific evaluation_criteria for {tenant_slug}")
 
+    # Inject rating_criteria text if the tenant has a non-empty rating_template
+    rating_template = tenant_cfg.get('rating_template') or {}
+    weights = rating_template.get('weights', {})
+    if weights:
+        total_points = sum(weights.values())
+        criteria_lines = []
+        for field, points in weights.items():
+            pct = round((points / total_points) * 100) if total_points else 0
+            criteria_lines.append(f"- {field}: {points} points ({pct}%)")
+        rating_criteria_text = (
+            "Evaluate the startup based on the following criteria and weights:\n\n"
+            + "\n".join(criteria_lines)
+            + "\n\nProvide a score out of 10 and reasoning."
+        )
+        flow.state['inputs']['rating_criteria'] = rating_criteria_text
+        print(f"rating_criteria injected for {tenant_slug} ({len(weights)} weighted fields, total {total_points} pts)")
+
     # 5. Execute the flow
     flow_execution_failed = False
     flow_error = None
@@ -317,16 +371,18 @@ def lambda_handler(event, context):
 
     final_audit = flow.state.get('audit_report', "Flow completed but 'audit_report' not in state.")
 
-    # 7. Apply per-tenant rating template
-    if tenant_cfg.get('rating_template'):
-        print(f"Applying rating_template for tenant {tenant_slug}")
-        if isinstance(final_audit, str):
-            try:
-                final_audit = json.loads(final_audit)
-            except Exception:
-                pass
-        if isinstance(final_audit, dict):
-            final_audit = apply_rating_template(final_audit, tenant_cfg['rating_template'])
+    # 7. Apply rating template (always called — extracts _overall_score unconditionally;
+    #    composite score is only calculated when a tenant rating_template exists).
+    if isinstance(final_audit, str):
+        try:
+            final_audit = json.loads(final_audit)
+        except Exception:
+            pass
+    if isinstance(final_audit, dict):
+        rating_template = tenant_cfg.get('rating_template')
+        if rating_template:
+            print(f"Applying rating_template for tenant {tenant_slug}")
+        final_audit = apply_rating_template(final_audit, rating_template)
 
     # 8. Save to DynamoDB with tenant_id
     dynamodb_table_name = os.environ.get("DYNAMODB_TABLE_NAME")
