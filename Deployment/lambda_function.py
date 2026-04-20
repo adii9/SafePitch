@@ -220,6 +220,22 @@ def sync_db_to_s3(bucket_name):
 # ---------------------------------------------------------------------------
 # DynamoDB Save — now includes tenant_id
 # ---------------------------------------------------------------------------
+def _sanitise_for_dynamodb(obj):
+    """
+    Recursively walk a dict/list and convert every Python float to Decimal,
+    because DynamoDB's boto3 client rejects float types outright.
+    Also drops None values at the top level (DynamoDB rejects null-typed attrs
+    unless the schema explicitly allows it).
+    """
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: _sanitise_for_dynamodb(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [_sanitise_for_dynamodb(v) for v in obj]
+    return obj
+
+
 def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
     table = dynamodb.Table(table_name)
     try:
@@ -232,23 +248,17 @@ def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
 
         # Extract each top-level section as a separate DynamoDB column
         # so the dashboard can query individual fields without parsing a blob.
-        extracted_deck_data   = final_audit.get('extracted_deck_data', {})
+        extracted_deck_data    = final_audit.get('extracted_deck_data', {})
         internet_verified_data = final_audit.get('internet_verified_data', {})
-        risk_analysis         = final_audit.get('risk_analysis', {})
-        scoring               = final_audit.get('scoring', {})
+        risk_analysis          = final_audit.get('risk_analysis', {})
+        scoring                = final_audit.get('scoring', {})
 
-        # Pull the numeric score to its own top-level attribute for easy filtering
+        # Pull the numeric score to its own top-level attribute for easy filtering.
         overall_score = final_audit.get('_overall_score')
         if overall_score is None:
             try:
                 overall_score = float(scoring.get('score', 0))
             except (TypeError, ValueError):
-                overall_score = None
-        # DynamoDB rejects Python floats — convert to Decimal
-        if overall_score is not None:
-            try:
-                overall_score = Decimal(str(overall_score))
-            except Exception:
                 overall_score = None
 
         item = {
@@ -256,13 +266,17 @@ def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
             'tenant_id':             tenant_id,
             'company_name':          company_name or 'Unknown',
             'timestamp':             datetime.utcnow().isoformat(),
-            # Separate columns — one per pipeline output section
             'overall_score':         overall_score,
             'extracted_deck_data':   extracted_deck_data,
             'internet_verified_data': internet_verified_data,
             'risk_analysis':         risk_analysis,
             'scoring':               scoring,
         }
+
+        # DynamoDB rejects ALL Python floats (including deeply nested ones).
+        # Recursively convert every float → Decimal before saving.
+        item = _sanitise_for_dynamodb(item)
+
         table.put_item(Item=item)
         print(f"Successfully saved results to DynamoDB table: {table_name} (tenant_id={tenant_id})")
     except Exception as e:
