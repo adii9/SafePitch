@@ -2,6 +2,7 @@ import os
 import io
 import json
 import asyncio
+import base64
 import boto3
 from botocore.exceptions import ClientError
 from llama_parse import LlamaParse
@@ -71,6 +72,38 @@ def download_file_from_drive(file_id, service):
         print(f"Error downloading file {file_id}: {str(e)}")
         raise e
 
+def download_file_from_s3(s3_key):
+    """Download a file from S3 to /tmp/"""
+    import uuid
+    s3 = boto3.client('s3')
+    bucket = os.environ.get('S3_BUCKET_NAME')
+    if not bucket:
+        raise ValueError("S3_BUCKET_NAME environment variable not set")
+
+    # Determine file extension from the key
+    ext = s3_key.split('.')[-1] if '.' in s3_key else 'pdf'
+    temp_path = f"/tmp/{uuid.uuid4().hex}.{ext}"
+
+    s3.download_file(bucket, s3_key, temp_path)
+    print(f"Downloaded s3://{bucket}/{s3_key} to {temp_path}")
+    return temp_path
+
+
+def decode_pdf_from_base64(pdf_base64, pdf_name):
+    """Decode base64 PDF content and save to /tmp"""
+    import uuid
+    temp_path = f"/tmp/{uuid.uuid4().hex}_{pdf_name}"
+    try:
+        pdf_bytes = base64.b64decode(pdf_base64)
+        with open(temp_path, 'wb') as f:
+            f.write(pdf_bytes)
+        print(f"PDF decoded: {temp_path}, size: {len(pdf_bytes)} bytes")
+        return temp_path
+    except Exception as e:
+        print(f"Failed to decode base64 PDF: {e}")
+        raise
+
+
 def build_response(status_code, body_dict):
     """Build a response with proper CORS headers for API Gateway."""
     body = json.dumps(body_dict)
@@ -101,12 +134,13 @@ def lambda_handler(event, context):
         body = event
 
     company_name = body.get('company_name', 'Unknown')
-    file_id = body.get('file_id')
     email_body = body.get('email_body', '')
     tenant_slug = body.get('tenant_slug', 'default')
 
-    if not file_id:
-        return build_response(400, {"error": "Missing file_id"})
+    # Check which input mode we're using
+    file_id = body.get('file_id')
+    s3_key = body.get('s3_key')
+    pdf_base64 = body.get('pdf_base64')
 
     # 2. Get environment variables
     llama_key = os.environ.get("LLAMA_CLOUD_API_KEY", "").strip()
@@ -120,14 +154,24 @@ def lambda_handler(event, context):
     temp_file_path = None
 
     try:
-        # 3. Retrieve Credentials from Secrets Manager
-        print("Fetching credentials from Secrets Manager...")
-        creds_info = get_google_credentials()
-        service = get_drive_service(creds_info)
-
-        # 4. Download Pitch Deck
-        print(f"Downloading file {file_id} from Drive...")
-        temp_file_path = download_file_from_drive(file_id, service)
+        # 3. Retrieve file — three input modes supported
+        if pdf_base64:
+            # Mode 1: Base64 PDF sent directly from the frontend
+            print("Decoding base64 PDF...")
+            temp_file_path = decode_pdf_from_base64(pdf_base64, body.get('pdf_name', 'upload.pdf'))
+        elif s3_key:
+            # Mode 2: File already uploaded to S3 via presigned URL
+            print(f"Downloading file from S3: {s3_key}")
+            temp_file_path = download_file_from_s3(s3_key)
+        elif file_id:
+            # Mode 3: Google Drive file ID (existing flow)
+            print("Fetching credentials from Secrets Manager...")
+            creds_info = get_google_credentials()
+            service = get_drive_service(creds_info)
+            print(f"Downloading file {file_id} from Drive...")
+            temp_file_path = download_file_from_drive(file_id, service)
+        else:
+            return build_response(400, {"error": "Missing file_id, s3_key, or pdf_base64"})
 
         # 5. Parse PDF to Markdown using LlamaParse
         print(f"Parsing {company_name} PDF to Markdown...")
