@@ -5,6 +5,7 @@ import boto3
 from botocore.exceptions import ClientError
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 # --- LAMBDA FIX ---
 # AWS Lambda environment is read-only except for /tmp.
@@ -121,6 +122,13 @@ def apply_rating_template(audit_result, rating_template):
             "thresholds": { ... }
         }
     """
+    # Guard: parse rating_template if it arrived as a JSON string
+    if isinstance(rating_template, str):
+        try:
+            rating_template = json.loads(rating_template)
+        except (json.JSONDecodeError, TypeError):
+            rating_template = {}
+
     # --- Always extract the overall AI score ---
     try:
         scoring = audit_result.get('scoring', {})
@@ -229,12 +237,18 @@ def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
         risk_analysis         = final_audit.get('risk_analysis', {})
         scoring               = final_audit.get('scoring', {})
 
-        # Pull the numeric score to its own top-level attribute for easy filtering
+        # Pull the numeric score to its own top-level attribute for easy filtering.
+        # Wrap in Decimal so DynamoDB doesn't reject Python floats.
         overall_score = final_audit.get('_overall_score')
         if overall_score is None:
             try:
                 overall_score = float(scoring.get('score', 0))
             except (TypeError, ValueError):
+                overall_score = None
+        if overall_score is not None:
+            try:
+                overall_score = Decimal(str(overall_score))
+            except Exception:
                 overall_score = None
 
         item = {
@@ -397,7 +411,8 @@ def lambda_handler(event, context):
         except Exception:
             pass
     if isinstance(final_audit, dict):
-        rating_template = tenant_cfg.get('rating_template')
+        rt_raw = tenant_cfg.get('rating_template')
+        rating_template = json.loads(rt_raw) if isinstance(rt_raw, str) else rt_raw
         if rating_template:
             print(f"Applying rating_template for tenant {tenant_slug}")
         final_audit = apply_rating_template(final_audit, rating_template)
