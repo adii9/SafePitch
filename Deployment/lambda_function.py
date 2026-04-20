@@ -47,19 +47,27 @@ def get_tenant_config(tenant_slug):
         return _default_config('default')
 
     try:
-        # Scan SafeDeckUsers for matching safedeck_email
+        # Scan SafeDeckUsers by matching fund_name (slugified)
+        slugified_slug = tenant_slug.lower().replace(' ', '').replace('-', '').replace('_', '')
         table = dynamodb.Table(os.environ.get('SAFE_DECK_USERS_TABLE', 'SafeDeckUsers'))
-        response = table.scan(
-            FilterExpression='safedeck_email = :email',
-            ExpressionAttributeValues={':email': f'{tenant_slug}@safedeck.ai'}
-        )
+        response = table.scan()
         items = response.get('Items', [])
-        if not items:
+
+        # Find matching user by comparing slugified fund_name
+        matched_user = None
+        for user in items:
+            fund_name = user.get('fund_name', '')
+            user_slug = fund_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+            if user_slug == slugified_slug:
+                matched_user = user
+                break
+
+        if not matched_user:
             print(f"No tenant config found for slug '{tenant_slug}', using defaults.")
             return _default_config('default')
 
-        user = items[0]
-        tenant_id = user.get('tenant_id', tenant_slug)
+        user = matched_user
+        tenant_id = user.get('user_id', tenant_slug)
 
         # Build tenant config from SafeDeckUsers record
         config = {
