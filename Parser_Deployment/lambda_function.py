@@ -3,6 +3,7 @@ import io
 import json
 import asyncio
 import base64
+import re
 import boto3
 from botocore.exceptions import ClientError
 from llama_parse import LlamaParse
@@ -136,6 +137,14 @@ def lambda_handler(event, context):
     company_name = body.get('company_name', 'Unknown')
     email_body = body.get('email_body', '')
     tenant_slug = body.get('tenant_slug', 'default')
+
+    # If tenant_slug is missing, try to extract from email_body (Gmail trigger).
+    # The Gmail forward often includes the original To: address in the email body.
+    if tenant_slug == 'default' and email_body:
+        match = re.search(r'([a-zA-Z0-9]+)@safedeck\.ai', email_body)
+        if match:
+            tenant_slug = match.group(1)
+            print(f"Extracted tenant_slug '{tenant_slug}' from email body")
 
     # Check which input mode we're using
     file_id = body.get('file_id')
