@@ -10,7 +10,7 @@ from safepitch.models import (
 import os
 
 os.environ['GEMINI_API_KEY'] = os.environ.get('GEMINI_API_KEY', '')
-GEMINI_MODEL = "gemini/gemini-2.5-flash"
+GEMINI_MODEL = os.environ.get('CREW_MODEL', 'gemini/gemini-2.5-flash')
 
 @CrewBase
 class SafepitchCrew():
