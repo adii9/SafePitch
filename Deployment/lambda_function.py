@@ -3,6 +3,7 @@ import json
 import sys
 import boto3
 from botocore.exceptions import ClientError
+from boto3.dynamodb.types import TypeDeserializer
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -220,6 +221,27 @@ def sync_db_to_s3(bucket_name):
 # ---------------------------------------------------------------------------
 # DynamoDB Save — now includes tenant_id
 # ---------------------------------------------------------------------------
+_deserializer = TypeDeserializer()
+
+def _deserialize_dynamodb(obj):
+    """
+    Recursively unwrap DynamoDB wire-format dicts ({"S": ..., "M": ..., etc.})
+    back to plain Python objects.
+
+    If the data is already plain Python (no DynamoDB type keys), it passes
+    through unchanged. Safe to call unconditionally.
+    """
+    if isinstance(obj, dict):
+        # DynamoDB type descriptor: a dict with exactly one key that is a known DDB type
+        DDB_TYPES = {'S', 'N', 'B', 'BOOL', 'NULL', 'M', 'L', 'SS', 'NS', 'BS'}
+        if len(obj) == 1 and next(iter(obj)) in DDB_TYPES:
+            return _deserializer.deserialize(obj)
+        # Otherwise recurse into values
+        return {k: _deserialize_dynamodb(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_deserialize_dynamodb(v) for v in obj]
+    return obj
+
 def _sanitise_for_dynamodb(obj):
     """
     Recursively walk a dict/list and convert every Python float to Decimal,
@@ -245,6 +267,12 @@ def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
                 final_audit = json.loads(final_audit)
             except (json.JSONDecodeError, Exception):
                 final_audit = {"raw_output": final_audit}
+
+        # If the audit data was serialised in DynamoDB wire-format (e.g. {"S": "value"}),
+        # unwrap it back to plain Python BEFORE extracting sections.
+        # This prevents double-wrapping when boto3 re-serialises on put_item.
+        if isinstance(final_audit, dict):
+            final_audit = _deserialize_dynamodb(final_audit)
 
         # Extract each top-level section as a separate DynamoDB column
         # so the dashboard can query individual fields without parsing a blob.
