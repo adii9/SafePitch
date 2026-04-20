@@ -312,15 +312,23 @@ def lambda_handler(event, context):
     if email_body:
         flow.state['inputs']['email_body'] = email_body
 
-    # Inject tenant-specific criteria so SafepitchFlow uses it
-    if tenant_cfg.get('evaluation_criteria'):
-        flow.state['inputs']['evaluation_criteria'] = tenant_cfg['evaluation_criteria']
+    # Inject tenant-specific criteria so SafepitchFlow uses it.
+    # Parse from string if DynamoDB stored it as JSON text.
+    ec_raw = tenant_cfg.get('evaluation_criteria')
+    evaluation_criteria = json.loads(ec_raw) if isinstance(ec_raw, str) else ec_raw
+    if evaluation_criteria:
+        flow.state['inputs']['evaluation_criteria'] = evaluation_criteria
         print(f"Using tenant-specific evaluation_criteria for {tenant_slug}")
 
     # Inject rating_criteria text if the tenant has a non-empty rating_template.
     # Weights are 1-10 importance scores, not point allocations.
-    rating_template = tenant_cfg.get('rating_template') or {}
-    weights = rating_template.get('weights', {})
+    # Parse from string if DynamoDB stored it as JSON text.
+    rt_raw = tenant_cfg.get('rating_template') or '{}'
+    try:
+        rating_template = json.loads(rt_raw) if isinstance(rt_raw, str) else rt_raw
+    except (json.JSONDecodeError, TypeError):
+        rating_template = {}
+    weights = rating_template.get('weights', {}) if isinstance(rating_template, dict) else {}
     if weights:
         criteria_lines = []
         for field, weight in weights.items():
