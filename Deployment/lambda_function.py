@@ -122,7 +122,7 @@ def apply_rating_template(audit_result, rating_template):
             "thresholds": { ... }
         }
     """
-    # Guard: parse rating_template if it arrived as a JSON string
+    # Guard: parse rating_template if DynamoDB returned it as a JSON string
     if isinstance(rating_template, str):
         try:
             rating_template = json.loads(rating_template)
@@ -237,14 +237,14 @@ def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
         risk_analysis         = final_audit.get('risk_analysis', {})
         scoring               = final_audit.get('scoring', {})
 
-        # Pull the numeric score to its own top-level attribute for easy filtering.
-        # Wrap in Decimal so DynamoDB doesn't reject Python floats.
+        # Pull the numeric score to its own top-level attribute for easy filtering
         overall_score = final_audit.get('_overall_score')
         if overall_score is None:
             try:
                 overall_score = float(scoring.get('score', 0))
             except (TypeError, ValueError):
                 overall_score = None
+        # DynamoDB rejects Python floats — convert to Decimal
         if overall_score is not None:
             try:
                 overall_score = Decimal(str(overall_score))
