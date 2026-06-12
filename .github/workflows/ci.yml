@@ -1,0 +1,66 @@
+name: CI
+
+# Run on every push and pull request. Tests the truth_scorer rubric and
+# (importantly) confirms the slim Docker image actually builds — the latter
+# catches Dockerfile regressions before they reach production.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    name: Truth Scorer Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install safepitch + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: pytest tests/ -v
+
+  build-slim-image:
+    name: Build Slim Lambda Image (sandboxed)
+    runs-on: ubuntu-latest
+    # Only run on main + PRs targeting main — keeps the build cache hot
+    # and avoids running docker on every branch push.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build slim image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Deployment/Dockerfile.slim
+          platforms: linux/amd64
+          provenance: false
+          push: false
+          tags: safedeck/minimax:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify import in built image
+        run: |
+          # Run the image as a container with PYTHONPATH set, import the
+          # safepitch package, and confirm it loads. Catches the kind of
+          # "image builds but won't run" issues we hit on 13 Jun 2026.
+          docker run --rm \
+            -e PYTHONPATH=/var/task/src \
+            safedeck/minimax:ci-${{ github.sha }} \
+            python -c "import safepitch.main; print('imports OK')"

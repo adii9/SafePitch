@@ -2,12 +2,14 @@
 **/__pycache__
 **/*.pyc
 **/*.pyo
+.pytest_cache/
 
-# Local test scripts — test_crew_local.py had a hardcoded Gemini API key
-# (caught 13 Jun 2026). Keep these out of the repo until secrets are moved
-# to .env (which is also gitignored).
-test_crew_local.py
-tests/
+# Local test scripts — these leak real API keys (Gemini, MiniMax) directly
+# into the source. Kept out of git until secrets are moved to .env.
+# Only test_truth_scorer.py is safe (no API calls, no secrets).
+tests/test_crew_local.py
+tests/test_lambda_locally.py
+tests/test_audit_result.json
 
 # Test/build outputs
 **/test_audit_result.json

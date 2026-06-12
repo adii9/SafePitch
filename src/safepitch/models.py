@@ -47,10 +47,8 @@ def compute_truth_score(
         Start at 100.
         -12 per red_flag, +4 per green_flag.
         -1 per internet_verified_data field with source_url == "pitch_deck" (not externally verified).
-        -3 per internet_verified_data field with source_url is null (could not be found).
+        -3 per internet_verified_data field with source_url == "Not found" (could not be verified).
         Clamp to [0, 100].
-
-    Accepts the raw upstream values (Pydantic models or dicts). Returns int 0-100.
     """
     score = 100
     score -= 12 * len(red_flags or [])
@@ -64,7 +62,7 @@ def compute_truth_score(
             src = getattr(value, "source_url", None)
         if src == "pitch_deck":
             score -= 1
-        elif src is None:
+        elif src == "Not found" or src is None:
             score -= 3
         # Real external URL: no deduction.
 
