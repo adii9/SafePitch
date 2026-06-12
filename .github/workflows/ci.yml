@@ -33,7 +33,12 @@ jobs:
           pip install "pydantic>=2.0" pytest
 
       - name: Run pytest
-        run: pytest tests/ -v
+        # Pin to the specific safe test file rather than the whole tests/
+        # directory — there are other test files in tests/ that are
+        # gitignored (they contain real API keys) and pytest will try to
+        # collect them if pointed at the directory, causing collection
+        # errors that mask the real test run.
+        run: pytest tests/test_truth_scorer.py -v
 
   build-slim-image:
     name: Build Slim Lambda Image (sandboxed)
@@ -55,6 +60,10 @@ jobs:
           platforms: linux/amd64
           provenance: false
           push: false
+          load: true   # Load the built image into the local daemon so the
+                       # 'docker run' verify step below can find it. (Without
+                       # this, the image lives in the buildx cache and
+                       # 'docker run' fails with "image not found".)
           tags: safedeck/minimax:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

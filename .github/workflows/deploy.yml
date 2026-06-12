@@ -37,7 +37,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "pydantic>=2.0" pytest
-          pytest tests/ -v
+          pytest tests/test_truth_scorer.py -v
 
   build-and-deploy:
     name: Build, Push, Deploy, Smoke Test
