@@ -1,9 +1,14 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # src/safepitch/main.py
-
+import json
 import sys
 import os
 from safepitch.crew import SafepitchCrew
+from safepitch.models import (
+    compute_truth_score,
+    make_verification_report,
+    VerificationReport,
+)
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 
@@ -13,58 +18,44 @@ class SafepitchFlow(Flow):
         """
         Local test runner for the Safepitch 40-Column Verified Audit.
         """
-        # --- Hardcoded fallback schema ---
-        _fallback_schema = {
-            "kyc": [
-                {"key": "promoter_name", "label": "Promoter / Founder Name"},
-                {"key": "promoter_linkedin", "label": "Founder LinkedIn URL"},
-                {"key": "founder_background", "label": "Founder Background"},
-                {"key": "founder_education", "label": "Founder Education"},
-                {"key": "product_stage", "label": "Product Stage"},
-                {"key": "product_differentiation", "label": "Product Differentiation"},
-                {"key": "tech_stack", "label": "Tech Stack"}
-            ],
-            "financial": [
-                {"key": "revenue", "label": "Revenue"},
-                {"key": "revenue_growth_rate", "label": "Revenue Growth Rate"},
-                {"key": "burn_rate", "label": "Burn Rate"},
-                {"key": "runway", "label": "Runway (months)"},
-                {"key": "current_round", "label": "Current Fundraising Round"},
-                {"key": "funding_stage", "label": "Funding Stage"},
-                {"key": "amount_raising", "label": "Amount Raising"},
-                {"key": "pre_money_valuation", "label": "Pre-money Valuation"}
-            ],
-            "market": [
-                {"key": "tam", "label": "TAM (Total Addressable Market)"},
-                {"key": "sam", "label": "SAM (Serviceable Addressable Market)"},
-                {"key": "som", "label": "SOM (Serviceable Obtainable Market)"},
-                {"key": "competitors_listed", "label": "Competitors Listed"},
-                {"key": "competitive_landscape", "label": "Competitive Landscape"}
-            ]
-        }
-
         # --- Build client_schema dynamically from tenant evaluation_criteria ---
-        # The Lambda handler injects evaluation_criteria into flow.state['inputs']
-        # during onboarding. If it's present and has must_have fields, we use those
-        # for the kyc section; financial and market sections stay as the fallback.
+        # Both 'must_have' and 'nice_to_have' are merged — the distinction is UX-only (for onboarding).
+        # No hardcoded fallbacks. If no evaluation_criteria exists, extraction is skipped.
         provided_inputs = self.state.get('inputs', {})
         evaluation_criteria = provided_inputs.get('evaluation_criteria')
 
-        if evaluation_criteria and evaluation_criteria.get('must_have'):
-            dynamic_kyc = [
-                {"key": field["key"], "label": field["label"]}
-                for field in evaluation_criteria["must_have"]
-                if "key" in field and "label" in field
-            ]
-            client_schema = {
-                "kyc": dynamic_kyc,
-                "financial": _fallback_schema["financial"],
-                "market": _fallback_schema["market"],
-            }
-            print(f"Using dynamic evaluation_criteria: {len(dynamic_kyc)} must-have fields loaded.")
+        all_field_keys = []
+        if evaluation_criteria:
+            must_have = evaluation_criteria.get('must_have', [])
+            nice_to_have = evaluation_criteria.get('nice_to_have', [])
+            # Both lists contain raw string keys (e.g. "promoter_name", "tam")
+            all_field_keys = must_have + nice_to_have
+            print(f"evaluation_criteria loaded: {len(must_have)} must_have + {len(nice_to_have)} nice_to_have = {len(all_field_keys)} total fields")
         else:
-            client_schema = _fallback_schema
-            print("No evaluation_criteria in state — using hardcoded fallback schema.")
+            print("No evaluation_criteria in state — no fields will be extracted.")
+
+        # Ensure company_name is always extracted (first field, always included)
+        if 'company_name' not in all_field_keys:
+            all_field_keys.insert(0, 'company_name')
+            print("Added company_name to extraction fields.")
+
+        # Build the flat field list with auto-generated labels from the key
+        def make_label(key: str) -> str:
+            # Upper-case acronyms first (TAM, SAM, SOM, NPS, MRR, ARR)
+            upper_keys = {'tam', 'sam', 'som', 'nps', 'mrr', 'arr', 'acv', 'ltv'}
+            if key.lower() in upper_keys:
+                return key.upper()
+            return key.replace('_', ' ').title()
+
+
+        all_fields = [
+            {"key": k, "label": make_label(k)}
+            for k in all_field_keys
+        ]
+
+        # Single section — no hardcoded categories. All fields go to extraction specialist.
+        client_schema = {"kyc": all_fields}
+        print(f"client_schema built with {len(all_fields)} fields.")
 
         def format_fields(fields: list) -> str:
             return "\n".join([f"- {f['label']} (JSON key: {f['key']})" for f in fields])
@@ -90,8 +81,8 @@ class SafepitchFlow(Flow):
                 "LinkedIn: linkedin.com/in/janedoe-example"
             ),
             'dynamic_kyc_fields': format_fields(client_schema['kyc']),
-            'dynamic_financial_fields': format_fields(client_schema['financial']),
-            'dynamic_market_fields': format_fields(client_schema['market']),
+            'dynamic_financial_fields': "",
+            'dynamic_market_fields': "",
         }
 
         # Pass rating_criteria through to the crew if the tenant provided one
@@ -111,6 +102,34 @@ class SafepitchFlow(Flow):
     def save_final_step(self, audit_report):
         print("\n\n=== FINAL AUDIT REPORT (JSON) ===")
         print(audit_report)
+
+        # Override the LLM-produced truth_score with the deterministic one.
+        # Why: the rubric is fixed and the inputs are structured, so the number
+        # should be reproducible across runs. The LLM still owns the summary
+        # sentence + tier label.
+        try:
+            report = json.loads(audit_report) if isinstance(audit_report, str) else audit_report
+            verification = report.get("verification") or {}
+            summary = verification.get("summary") or ""
+            risk = report.get("risk_analysis") or {}
+            verified = report.get("internet_verified_data") or {}
+
+            override = make_verification_report(
+                red_flags=risk.get("red_flags", []),
+                green_flags=risk.get("green_flags", []),
+                internet_verified_data=verified,
+                summary=summary,
+            )
+            report["verification"] = override.model_dump()
+            print(f"\n[verify] deterministic truth_score = {override.truth_score} (tier: {override.tier})")
+
+            # Re-serialise back to the format downstream expects
+            if isinstance(audit_report, str):
+                audit_report = json.dumps(report)
+            else:
+                audit_report = report
+        except Exception as e:
+            print(f"\n[verify] WARNING: could not override truth_score deterministically: {e}")
 
         # Store in state so Lambda handler can easily retrieve it
         self.state['audit_report'] = audit_report

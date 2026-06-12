@@ -39,6 +39,7 @@ DB_S3_KEY = 'crewai_state/flows.db'
 def get_tenant_config(tenant_slug):
     """
     Look up tenant configuration from SafeDeckUsers by matching safedeck_email.
+    tenant_slug = full email address e.g. safedeck16@gmail.com
     Falls back to default config if no tenant found.
     
     Returns dict with keys:
@@ -49,23 +50,21 @@ def get_tenant_config(tenant_slug):
         return _default_config('default')
 
     try:
-        # Scan SafeDeckUsers by matching fund_name (slugified)
-        slugified_slug = tenant_slug.lower().replace(' ', '').replace('-', '').replace('_', '')
         table = dynamodb.Table(os.environ.get('SAFE_DECK_USERS_TABLE', 'SafeDeckUsers'))
         response = table.scan()
         items = response.get('Items', [])
 
-        # Find matching user by comparing slugified fund_name
+        # Find matching user by email (fallback to safedeck_email for backward compat)
         matched_user = None
         for user in items:
-            fund_name = user.get('fund_name', '')
-            user_slug = fund_name.lower().replace(' ', '').replace('-', '').replace('_', '')
-            if user_slug == slugified_slug:
+            email = user.get('email', '') or ''
+            safedeck_email = user.get('safedeck_email', '') or ''
+            if email == tenant_slug or safedeck_email == tenant_slug:
                 matched_user = user
                 break
 
         if not matched_user:
-            print(f"No tenant config found for slug '{tenant_slug}', using defaults.")
+            print(f"No tenant config found for safedeck_email '{tenant_slug}', using defaults.")
             return _default_config('default')
 
         user = matched_user
@@ -75,7 +74,6 @@ def get_tenant_config(tenant_slug):
         config = {
             'tenant_id': tenant_id,
             'tenant_slug': tenant_slug,
-            # Onboarding V2 fills these; fall back to None until then
             'evaluation_criteria': user.get('evaluation_criteria'),
             'rating_template': user.get('rating_template'),
             'output_sheet_mapping': user.get('output_sheet_mapping'),
@@ -384,6 +382,14 @@ def lambda_handler(event, context):
         rating_template = json.loads(rt_raw) if isinstance(rt_raw, str) else rt_raw
     except (json.JSONDecodeError, TypeError):
         rating_template = {}
+    # Inject rating_criteria text if the tenant has a non-empty rating_template.
+    # Weights are 1-10 importance scores, not point allocations.
+    # Parse from string if DynamoDB stored it as JSON text.
+    rt_raw = tenant_cfg.get('rating_template') or '{}'
+    try:
+        rating_template = json.loads(rt_raw) if isinstance(rt_raw, str) else rt_raw
+    except (json.JSONDecodeError, TypeError):
+        rating_template = {}
     weights = rating_template.get('weights', {}) if isinstance(rating_template, dict) else {}
     if weights:
         criteria_lines = []
@@ -397,8 +403,17 @@ def lambda_handler(event, context):
             + "\n".join(criteria_lines)
             + "\n\nProvide a single overall score out of 10 and a brief reasoning explaining the key strengths and weaknesses."
         )
-        flow.state['inputs']['rating_criteria'] = rating_criteria_text
-        print(f"rating_criteria injected for {tenant_slug} ({len(weights)} weighted fields)")
+    else:
+        # Default criteria when no tenant rating_template exists
+        rating_criteria_text = (
+            "Evaluate the startup holistically out of 10 based on the following criteria: "
+            "Team quality and founder track record, market size and opportunity, "
+            "traction and financials, product differentiation, and competitive landscape. "
+            "Provide a single overall score out of 10 and a brief reasoning explaining "
+            "the key strengths and weaknesses."
+        )
+    flow.state['inputs']['rating_criteria'] = rating_criteria_text
+    print(f"rating_criteria injected for {tenant_slug} ({len(weights)} weighted fields)")
 
     # 5. Execute the flow
     flow_execution_failed = False
@@ -461,8 +476,23 @@ def lambda_handler(event, context):
 
     # 8. Save to DynamoDB with tenant_id
     dynamodb_table_name = os.environ.get("DYNAMODB_TABLE_NAME")
+    # Use canonical company name from extraction output, not user-supplied name.
+    # If extraction couldn't find it, fall back to user-supplied.
+    canonical_company_name = company_name
+    if isinstance(final_audit, dict):
+        extracted = final_audit.get('extracted_deck_data', {})
+        if isinstance(extracted, str):
+            try:
+                extracted = json.loads(extracted)
+            except Exception:
+                extracted = {}
+        deck_company = extracted.get('company_name')
+        if deck_company and deck_company != 'Not stated':
+            canonical_company_name = deck_company
+            print(f"Using canonical company name from deck: {canonical_company_name}")
+
     if dynamodb_table_name:
-        save_to_dynamodb(dynamodb_table_name, tenant_id, company_name, final_audit)
+        save_to_dynamodb(dynamodb_table_name, tenant_id, canonical_company_name, final_audit)
 
     # 9. Include tenant context in response for downstream (N8N webhook)
     response_body = {

@@ -5,6 +5,7 @@ from safepitch.models import (
     create_dynamic_model,
     DiscrepancyAnalysis,
     StartupRating,
+    VerificationReport,
     FinalConsolidatedReport
 )
 import os
@@ -67,6 +68,14 @@ class SafepitchCrew():
             verbose=True
         )
 
+    @agent
+    def claim_truth_scorer(self) -> Agent:
+        return Agent(
+            config=self.agents_config['claim_truth_scorer'],
+            llm=GEMINI_MODEL,
+            verbose=True
+        )
+
     @task
     def pitch_deck_extraction_task(self) -> Task:
         return Task(
@@ -92,6 +101,13 @@ class SafepitchCrew():
         return Task(
             config=self.tasks_config['startup_rating_task'],
             output_json=StartupRating,
+        )
+
+    @task
+    def claim_truth_scoring_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['claim_truth_scoring_task'],
+            output_json=VerificationReport,
         )
 
     @task

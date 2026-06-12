@@ -17,7 +17,7 @@ COPY knowledge ${LAMBDA_TASK_ROOT}/knowledge
 # Install the package and its dependencies
 RUN uv pip install --system --no-cache --target ${LAMBDA_TASK_ROOT} .
 
-# Copy the lambda handler script we created
+# Copy the lambda handler
 COPY Deployment/lambda_function.py ${LAMBDA_TASK_ROOT}/lambda_function.py
 RUN chmod 644 ${LAMBDA_TASK_ROOT}/lambda_function.py
 

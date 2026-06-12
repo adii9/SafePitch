@@ -1,3 +1,37 @@
+# Build / dev artifacts (excluded from git)
+**/__pycache__
+**/*.pyc
+**/*.pyo
+
+# Local test scripts — test_crew_local.py had a hardcoded Gemini API key
+# (caught 13 Jun 2026). Keep these out of the repo until secrets are moved
+# to .env (which is also gitignored).
+test_crew_local.py
+tests/
+
+# Test/build outputs
+**/test_audit_result.json
+**/crew_output.json
+safepitch.db
+graphify-out/
+
+# Local deploy scripts
+deploy-safedeck.sh
+
+# Tokens and credentials
+**/youtube_tokens.json
 .env
-__pycache__/
-.DS_Store
+.env.*
+!.env.example
+
+# Local parser images (separate Lambda, separate repo concern)
+Parser_Deployment/
+
+# Untracked PDFs and large files
+*.pdf
+!knowledge/**/*.pdf
+
+# Abandoned Lambda layer work (12 Jun 2026 — layer-pivot was abandoned,
+# ECR slim image is the chosen path. Keep dist/ out of git but keep the
+# build scripts in case we revisit.)
+Deployment/LambdaLayers/dist/

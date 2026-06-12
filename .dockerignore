@@ -1,0 +1,26 @@
+# Build/dev artifacts that must not end up in the Lambda image
+**/__pycache__
+**/*.pyc
+**/*.pyo
+
+# Dev/test noise
+test_crew_local.py
+tests/
+**/test_audit_result.json
+**/crew_output.json
+safepitch.db
+graphify-out/
+deploy-safedeck.sh
+
+# Tokens and credentials
+**/youtube_tokens.json
+.env
+.env.*
+!.env.example
+
+# Local parser images
+Parser_Deployment/
+
+# Untracked PDFs
+*.pdf
+!knowledge/**/*.pdf
