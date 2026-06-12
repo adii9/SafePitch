@@ -23,10 +23,14 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install safepitch + dev deps
+      - name: Install test deps
+        # safepitch.models only imports pydantic + typing. No need to pull
+        # in the full crewai/chromadb/etc. dep tree just to run pure-function
+        # tests — that build was failing on GH runners (chromadb needs
+        # system libs that aren't pre-installed).
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install "pydantic>=2.0" pytest
 
       - name: Run pytest
         run: pytest tests/ -v
@@ -57,10 +61,10 @@ jobs:
 
       - name: Verify import in built image
         run: |
-          # Run the image as a container with PYTHONPATH set, import the
-          # safepitch package, and confirm it loads. Catches the kind of
-          # "image builds but won't run" issues we hit on 13 Jun 2026.
+          # Run the image as a container, import the safepitch package and
+          # the lambda handler module, and confirm both load. Catches the
+          # kind of "image builds but won't run" issues we hit on 13 Jun 2026
+          # (WORKDIR, PYTHONPATH, perms).
           docker run --rm \
-            -e PYTHONPATH=/var/task/src \
             safedeck/minimax:ci-${{ github.sha }} \
-            python -c "import safepitch.main; print('imports OK')"
+            python -c "import safepitch.main, lambda_function; print('imports OK')"
