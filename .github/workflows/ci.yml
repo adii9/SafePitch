@@ -70,10 +70,20 @@ jobs:
 
       - name: Verify import in built image
         run: |
-          # Run the image as a container, import the safepitch package and
-          # the lambda handler module, and confirm both load. Catches the
-          # kind of "image builds but won't run" issues we hit on 13 Jun 2026
-          # (WORKDIR, PYTHONPATH, perms).
-          docker run --rm \
+          # Sanity check: the image should import the safepitch package
+          # and we should be able to construct the main crew class.
+          # Catches the runtime-contract issues we hit on 13 Jun 2026
+          # (WORKDIR, PYTHONPATH, perms, base image).
+          #
+          # Override the ENTRYPOINT — the Lambda base image's RIE entrypoint
+          # expects a handler name as the first arg. For a plain import test
+          # we need to bypass it.
+          #
+          # Set AWS_DEFAULT_REGION — boto3 client construction at module
+          # import (in lambda_function.py) needs a region. boto3 reads
+          # AWS_DEFAULT_REGION (the SDK-standard var); AWS_REGION alone
+          # is not enough.
+          docker run --rm --entrypoint="" \
+            -e AWS_DEFAULT_REGION=eu-north-1 \
             safedeck/minimax:ci-${{ github.sha }} \
             python -c "import safepitch.main, lambda_function; print('imports OK')"
