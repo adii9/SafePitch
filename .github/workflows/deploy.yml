@@ -158,8 +158,14 @@ jobs:
             exit 1
           fi
           # Confirm the verification block is in the response (Task 3).
-          if ! python3 -c "import json; d=json.load(open('/tmp/smoke_response.json')); assert 'verification' in d, 'missing verification block'; print('verification block present')"; then
-            echo "::error::Smoke response missing 'verification' block — Task 3 regressed?"
+          # The Lambda returns a JSON envelope with a stringified 'body' field; the
+          # verification block is inside body -> audit_data -> verification.
+          # The check script lives in .github/scripts/ (checked in) and is copied
+          # to /tmp so it has a stable path on the runner.
+          cp .github/scripts/check_verification.py /tmp/check_verification.py
+          python3 /tmp/check_verification.py /tmp/smoke_response.json
+          if [ $? -ne 0 ]; then
+            echo "::error::Smoke response missing or malformed 'verification' block — Task 3 regressed?"
             exit 1
           fi
           echo "→ Smoke test passed (HTTP 200, verification block present)"

@@ -297,6 +297,7 @@ def save_to_dynamodb(table_name, tenant_id, company_name, final_audit):
             'internet_verified_data': internet_verified_data,
             'risk_analysis':         risk_analysis,
             'scoring':               scoring,
+            'verification':          (final_audit.get('verification', {}) if isinstance(final_audit, dict) else {}),
         }
 
         # DynamoDB rejects ALL Python floats (including deeply nested ones).
